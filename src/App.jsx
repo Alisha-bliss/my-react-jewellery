@@ -6,6 +6,7 @@ import ProductCard from './components/ProductCard'
 import LoginModal from './components/LoginModal'
 import AdminPanel from './components/AdminPanel'
 import UserDashboard from './components/UserDashboard'
+import ProductDetail from './components/ProductDetail'
 
 function App() {
   const [products, setProducts] = useState([])
@@ -16,7 +17,7 @@ function App() {
   const [searchTerm, setSearchTerm] = useState('')
   const [activePage, setActivePage] = useState('home')
   const [selectedZodiac, setSelectedZodiac] = useState(null)
-  const [selectedProduct, setSelectedProduct] = useState(null)
+  const [selectedProductDetail, setSelectedProductDetail] = useState(null)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [wishlist, setWishlist] = useState([])
   const [searchResults, setSearchResults] = useState([])
@@ -141,6 +142,20 @@ function App() {
   const goBackToAdmin = () => {
     setIsPublicView(false)
     setActivePage('admin')
+    scrollToTop()
+  }
+
+  // Open product detail page
+  const openProductDetail = (product) => {
+    setSelectedProductDetail(product)
+    setActivePage('productdetail')
+    scrollToTop()
+  }
+
+  // Close product detail page
+  const closeProductDetail = () => {
+    setSelectedProductDetail(null)
+    setActivePage('home')
     scrollToTop()
   }
 
@@ -359,8 +374,6 @@ function App() {
   ]
 
   const getZodiacProduct = (sign) => products.find(p => p.name === sign.productName)
-  const openImageModal = (product) => setSelectedProduct(product)
-  const closeImageModal = () => setSelectedProduct(null)
 
   const suggestions = getSearchSuggestions()
   const currentProducts = activePage === 'search' && searchResults.length > 0 ? searchResults : 
@@ -379,22 +392,25 @@ function App() {
     </button>
   )
 
-  // Check if we should show the top bar (not in admin panel AND not in dashboard)
-  const showTopBar = !(activePage === 'admin' && !isPublicView) && activePage !== 'dashboard'
+  // Check if we should show the top bar (not in admin panel AND not in dashboard AND not in product detail)
+  const showTopBar = !(activePage === 'admin' && !isPublicView) && activePage !== 'dashboard' && activePage !== 'productdetail'
 
-  // Only show Header when NOT in admin panel AND NOT in dashboard
-  const showHeader = !(activePage === 'admin' && !isPublicView) && activePage !== 'dashboard'
+  // Only show Header when NOT in admin panel AND NOT in dashboard AND NOT in product detail
+  const showHeader = !(activePage === 'admin' && !isPublicView) && activePage !== 'dashboard' && activePage !== 'productdetail'
+
+  // Check if we're in admin panel mode
+  const isAdminMode = activePage === 'admin' && !isPublicView
 
   return (
     <div className="app">
-      {/* Top Bar - Only show when NOT in admin panel and NOT in dashboard */}
+      {/* Top Bar - Only show when NOT in admin panel, NOT in dashboard, NOT in product detail */}
       {showTopBar && (
         <div className="top-bar">
           <p>✨ Free Shipping on orders above Rs. 10,000 all over inside the valley. ✨</p>
         </div>
       )}
 
-      {/* Only show Header when NOT in admin panel and NOT in dashboard */}
+      {/* Only show Header when NOT in admin panel, NOT in dashboard, NOT in product detail */}
       {showHeader && (
         <Header 
           user={user}
@@ -432,8 +448,18 @@ function App() {
         />
       )}
 
-      {/* HOME PAGE - Only show when not in admin panel */}
-      {activePage === 'home' && !(activePage === 'admin' && !isPublicView) && (
+      {/* PRODUCT DETAIL PAGE - Always show when product is selected, regardless of login status */}
+      {activePage === 'productdetail' && selectedProductDetail && (
+        <ProductDetail 
+          product={selectedProductDetail}
+          addToCart={addToCart}
+          onClose={closeProductDetail}
+          onNavigate={navigateTo}
+        />
+      )}
+
+      {/* HOME PAGE - Only show when not in admin panel, not in dashboard, not in product detail */}
+      {activePage === 'home' && !isAdminMode && !(activePage === 'productdetail') && (
         <>
           <div className="hero-slider">
             {heroSlides.map((slide, index) => (
@@ -486,7 +512,7 @@ function App() {
                     onAddToCart={addToCart}
                     onToggleWishlist={toggleWishlist}
                     isInWishlist={isInWishlist(product.id)}
-                    onImageClick={openImageModal}
+                    onImageClick={openProductDetail}
                   />
                 ))
               )}
@@ -496,7 +522,7 @@ function App() {
       )}
 
       {/* CART PAGE */}
-      {activePage === 'cart' && !(activePage === 'admin' && !isPublicView) && (
+      {activePage === 'cart' && !isAdminMode && !(activePage === 'productdetail') && (
         <div className="page-content cart-page">
           <button className="back-btn" onClick={() => navigateTo('home')}>← Continue Shopping</button>
           <h2 className="page-title">🛒 Your Shopping Cart</h2>
@@ -537,7 +563,7 @@ function App() {
       )}
 
       {/* WISHLIST PAGE */}
-      {activePage === 'wishlist' && !(activePage === 'admin' && !isPublicView) && (
+      {activePage === 'wishlist' && !isAdminMode && !(activePage === 'productdetail') && (
         <div className="page-content wishlist-page">
           <button className="back-btn" onClick={() => navigateTo('home')}>← Back to Home</button>
           <h2 className="page-title">❤️ My Wishlist</h2>
@@ -547,7 +573,7 @@ function App() {
             <div className="products-grid">
               {wishlist.map(product => (
                 <div key={product.id} className="product-card">
-                  <img src={product.image_url} alt={product.name} onClick={() => openImageModal(product)} />
+                  <img src={product.image_url} alt={product.name} onClick={() => openProductDetail(product)} />
                   <h3>{product.name}</h3>
                   <p className="material">{product.material} | {product.category}</p>
                   <div className="price-row"><span className="price">₹{product.price}</span></div>
@@ -563,7 +589,7 @@ function App() {
       )}
 
       {/* NEW ARRIVALS PAGE */}
-      {activePage === 'new' && !(activePage === 'admin' && !isPublicView) && (
+      {activePage === 'new' && !isAdminMode && !(activePage === 'productdetail') && (
         <div className="page-content">
           <h2 className="page-title">✨ New Arrivals ✨</h2>
           <p className="page-subtitle">Discover our latest handmade jewellery collection</p>
@@ -575,7 +601,7 @@ function App() {
                 onAddToCart={addToCart}
                 onToggleWishlist={toggleWishlist}
                 isInWishlist={isInWishlist(product.id)}
-                onImageClick={openImageModal}
+                onImageClick={openProductDetail}
               />
             ))}
           </div>
@@ -583,7 +609,7 @@ function App() {
       )}
 
       {/* ALL JEWELLERY PAGE */}
-      {activePage === 'all' && !(activePage === 'admin' && !isPublicView) && (
+      {activePage === 'all' && !isAdminMode && !(activePage === 'productdetail') && (
         <div className="page-content">
           <h2 className="page-title">All Jewellery Collection</h2>
           <p className="page-subtitle">Browse our complete collection</p>
@@ -595,7 +621,7 @@ function App() {
                 onAddToCart={addToCart}
                 onToggleWishlist={toggleWishlist}
                 isInWishlist={isInWishlist(product.id)}
-                onImageClick={openImageModal}
+                onImageClick={openProductDetail}
               />
             ))}
           </div>
@@ -603,7 +629,7 @@ function App() {
       )}
 
       {/* GIFTING PAGE */}
-      {activePage === 'gifting' && !(activePage === 'admin' && !isPublicView) && (
+      {activePage === 'gifting' && !isAdminMode && !(activePage === 'productdetail') && (
         <div className="page-content">
           <h2 className="page-title">🎁 Gifting Collection</h2>
           <p className="page-subtitle">Perfect gifts for your loved ones</p>
@@ -621,7 +647,7 @@ function App() {
                 onAddToCart={addToCart}
                 onToggleWishlist={toggleWishlist}
                 isInWishlist={isInWishlist(product.id)}
-                onImageClick={openImageModal}
+                onImageClick={openProductDetail}
               />
             ))}
           </div>
@@ -629,7 +655,7 @@ function App() {
       )}
 
       {/* ZODIAC PAGE */}
-      {activePage === 'zodiac' && !selectedZodiac && !(activePage === 'admin' && !isPublicView) && (
+      {activePage === 'zodiac' && !selectedZodiac && !isAdminMode && !(activePage === 'productdetail') && (
         <div className="page-content">
           <h2 className="page-title">🔮 Zodiac Jewellery</h2>
           <p className="page-subtitle">Find your zodiac sign</p>
@@ -646,7 +672,7 @@ function App() {
       )}
 
       {/* ZODIAC PRODUCT PAGE */}
-      {activePage === 'zodiac' && selectedZodiac && !(activePage === 'admin' && !isPublicView) && (
+      {activePage === 'zodiac' && selectedZodiac && !isAdminMode && !(activePage === 'productdetail') && (
         <div className="page-content">
           <button className="back-btn" onClick={() => setSelectedZodiac(null)}>← Back to Zodiac Signs</button>
           <h2 className="page-title">{selectedZodiac.emoji} {selectedZodiac.name} Collection</h2>
@@ -658,7 +684,7 @@ function App() {
                 onAddToCart={addToCart}
                 onToggleWishlist={toggleWishlist}
                 isInWishlist={isInWishlist(getZodiacProduct(selectedZodiac).id)}
-                onImageClick={openImageModal}
+                onImageClick={openProductDetail}
               />
             )}
           </div>
@@ -666,7 +692,7 @@ function App() {
       )}
 
       {/* WEDDING PAGE */}
-      {activePage === 'wedding' && !(activePage === 'admin' && !isPublicView) && (
+      {activePage === 'wedding' && !isAdminMode && !(activePage === 'productdetail') && (
         <div className="page-content">
           <h2 className="page-title">💍 Wedding Collection</h2>
           <p className="page-subtitle">Traditional wedding jewellery</p>
@@ -678,7 +704,7 @@ function App() {
                 onAddToCart={addToCart}
                 onToggleWishlist={toggleWishlist}
                 isInWishlist={isInWishlist(product.id)}
-                onImageClick={openImageModal}
+                onImageClick={openProductDetail}
               />
             ))}
           </div>
@@ -686,7 +712,7 @@ function App() {
       )}
 
       {/* BLOG PAGE */}
-      {activePage === 'blog' && !selectedBlog && !(activePage === 'admin' && !isPublicView) && (
+      {activePage === 'blog' && !selectedBlog && !isAdminMode && !(activePage === 'productdetail') && (
         <div className="page-content">
           <h2 className="page-title">📝 Our Blog</h2>
           <p className="page-subtitle">Latest news, tips, and stories from Siddhi Jewells</p>
@@ -708,7 +734,7 @@ function App() {
       )}
 
       {/* INDIVIDUAL BLOG POST */}
-      {activePage === 'blog' && selectedBlog && !(activePage === 'admin' && !isPublicView) && (
+      {activePage === 'blog' && selectedBlog && !isAdminMode && !(activePage === 'productdetail') && (
         <div className="page-content blog-post-page">
           <button className="back-btn" onClick={() => setSelectedBlog(null)}>← Back to All Posts</button>
           <div className="blog-post-container">
@@ -731,14 +757,14 @@ function App() {
       )}
 
       {/* SALE PAGE */}
-      {activePage === 'sale' && !(activePage === 'admin' && !isPublicView) && (
+      {activePage === 'sale' && !isAdminMode && !(activePage === 'productdetail') && (
         <div className="page-content">
           <div className="sale-header"><h2 className="page-title">🔥 SALE 🔥</h2><p className="page-subtitle">Up to 50% off!</p></div>
           <div className="products-grid">
             {getNonZodiacProducts().filter(product => saleProductNames.includes(product.name)).map(product => (
               <div key={product.id} className="product-card sale-card">
                 <div className="sale-badge">SALE 50% OFF</div>
-                <img src={product.image_url} alt={product.name} onClick={() => openImageModal(product)} />
+                <img src={product.image_url} alt={product.name} onClick={() => openProductDetail(product)} />
                 <h3>{product.name}</h3>
                 <p className="material">{product.material}</p>
                 <div className="price-row">
@@ -757,7 +783,7 @@ function App() {
       )}
 
       {/* ANNIVERSARY GIFTS PAGE */}
-      {activePage === 'anniversary' && !(activePage === 'admin' && !isPublicView) && (
+      {activePage === 'anniversary' && !isAdminMode && !(activePage === 'productdetail') && (
         <div className="page-content">
           <button className="back-btn" onClick={() => navigateTo('gifting')}>← Back to Gifting</button>
           <h2 className="page-title">💝 Anniversary Gifts</h2>
@@ -770,7 +796,7 @@ function App() {
                 onAddToCart={addToCart}
                 onToggleWishlist={toggleWishlist}
                 isInWishlist={isInWishlist(product.id)}
-                onImageClick={openImageModal}
+                onImageClick={openProductDetail}
               />
             ))}
           </div>
@@ -778,7 +804,7 @@ function App() {
       )}
 
       {/* BIRTHDAY GIFTS PAGE */}
-      {activePage === 'birthday' && !(activePage === 'admin' && !isPublicView) && (
+      {activePage === 'birthday' && !isAdminMode && !(activePage === 'productdetail') && (
         <div className="page-content">
           <button className="back-btn" onClick={() => navigateTo('gifting')}>← Back to Gifting</button>
           <h2 className="page-title">🎂 Birthday Special Gifts</h2>
@@ -791,7 +817,7 @@ function App() {
                 onAddToCart={addToCart}
                 onToggleWishlist={toggleWishlist}
                 isInWishlist={isInWishlist(product.id)}
-                onImageClick={openImageModal}
+                onImageClick={openProductDetail}
               />
             ))}
           </div>
@@ -799,7 +825,7 @@ function App() {
       )}
 
       {/* WEDDING GIFT PAGE */}
-      {activePage === 'weddinggift' && !(activePage === 'admin' && !isPublicView) && (
+      {activePage === 'weddinggift' && !isAdminMode && !(activePage === 'productdetail') && (
         <div className="page-content">
           <button className="back-btn" onClick={() => navigateTo('gifting')}>← Back to Gifting</button>
           <h2 className="page-title">💒 Wedding Gift Collection</h2>
@@ -812,7 +838,7 @@ function App() {
                 onAddToCart={addToCart}
                 onToggleWishlist={toggleWishlist}
                 isInWishlist={isInWishlist(product.id)}
-                onImageClick={openImageModal}
+                onImageClick={openProductDetail}
               />
             ))}
           </div>
@@ -846,21 +872,6 @@ function App() {
           onNavigate={navigateTo}
           placeOrder={placeOrder}
         />
-      )}
-
-      {/* IMAGE MODAL */}
-      {selectedProduct && (
-        <div className="modal image-modal" onClick={closeImageModal}>
-          <div className="modal-content image-modal-content" onClick={e => e.stopPropagation()}>
-            <button className="close-modal-btn" onClick={closeImageModal}>✕</button>
-            <img src={selectedProduct.image_url} alt={selectedProduct.name} className="enlarged-image" />
-            <h3>{selectedProduct.name}</h3>
-            <p className="material">{selectedProduct.material} | {selectedProduct.category}</p>
-            <p className="price">₹{selectedProduct.price}</p>
-            <p className="description">{selectedProduct.description}</p>
-            <button className="add-to-cart-modal" onClick={() => { addToCart(selectedProduct); closeImageModal(); }}>Add to Cart 🛒</button>
-          </div>
-        </div>
       )}
 
       <Footer />
