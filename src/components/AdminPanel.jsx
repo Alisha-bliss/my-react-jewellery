@@ -10,13 +10,20 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
     totalProducts: 0,
     totalOrders: 0,
     pendingOrders: 0,
-    totalRevenue: 0
+    processingOrders: 0,
+    shippedOrders: 0,
+    deliveredOrders: 0,
+    cancelledOrders: 0,
+    totalRevenue: 0,
+    monthlyRevenue: 0,
+    weeklyOrders: 0
   })
   const [orders, setOrders] = useState([])
   const [users, setUsers] = useState([])
   const [news, setNews] = useState([])
   const [newNews, setNewNews] = useState({ title: '', content: '', date: '' })
   const [showNewsForm, setShowNewsForm] = useState(false)
+  const [monthlyData, setMonthlyData] = useState([])
   
   const [newProduct, setNewProduct] = useState({
     name: '', category: '', material: '', price: '', description: '', image_url: '', stock: ''
@@ -33,6 +40,7 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
     fetchOrders()
     fetchUsers()
     fetchNews()
+    fetchMonthlyData()
   }, [])
 
   const fetchStats = async () => {
@@ -49,12 +57,46 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
       const ordersData = await ordersRes.json()
       const safeOrders = ensureArray(ordersData)
       
+      // Calculate order status counts
+      const pendingOrders = safeOrders.filter(o => o && o.status === 'pending').length
+      const processingOrders = safeOrders.filter(o => o && o.status === 'processing').length
+      const shippedOrders = safeOrders.filter(o => o && o.status === 'shipped').length
+      const deliveredOrders = safeOrders.filter(o => o && o.status === 'delivered').length
+      const cancelledOrders = safeOrders.filter(o => o && o.status === 'cancelled').length
+      
+      // Calculate revenue
+      const totalRevenue = safeOrders.reduce((sum, o) => sum + (o?.total_amount || 0), 0)
+      
+      // Get current month revenue
+      const currentMonth = new Date().getMonth()
+      const currentYear = new Date().getFullYear()
+      const monthlyRevenue = safeOrders
+        .filter(o => {
+          const orderDate = new Date(o.created_at)
+          return orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear
+        })
+        .reduce((sum, o) => sum + (o?.total_amount || 0), 0)
+      
+      // Get weekly orders (last 7 days)
+      const weekAgo = new Date()
+      weekAgo.setDate(weekAgo.getDate() - 7)
+      const weeklyOrders = safeOrders.filter(o => {
+        const orderDate = new Date(o.created_at)
+        return orderDate >= weekAgo
+      }).length
+      
       setStats({
         totalUsers: safeUsers.length,
         totalProducts: safeProducts.length,
         totalOrders: safeOrders.length,
-        pendingOrders: safeOrders.filter(o => o && o.status === 'pending').length,
-        totalRevenue: safeOrders.reduce((sum, o) => sum + (o?.total_amount || 0), 0)
+        pendingOrders,
+        processingOrders,
+        shippedOrders,
+        deliveredOrders,
+        cancelledOrders,
+        totalRevenue,
+        monthlyRevenue,
+        weeklyOrders
       })
     } catch (error) {
       console.error('Error fetching stats:', error)
@@ -63,7 +105,13 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
         totalProducts: 0,
         totalOrders: 0,
         pendingOrders: 0,
-        totalRevenue: 0
+        processingOrders: 0,
+        shippedOrders: 0,
+        deliveredOrders: 0,
+        cancelledOrders: 0,
+        totalRevenue: 0,
+        monthlyRevenue: 0,
+        weeklyOrders: 0
       })
     }
   }
@@ -98,6 +146,36 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
     } catch (error) {
       console.error('Error fetching news:', error)
       setNews([])
+    }
+  }
+
+  const fetchMonthlyData = async () => {
+    try {
+      const ordersRes = await fetch('http://localhost:5001/api/orders')
+      const ordersData = await ordersRes.json()
+      const safeOrders = ensureArray(ordersData)
+      
+      // Group orders by month
+      const monthlyMap = {}
+      safeOrders.forEach(order => {
+        if (order && order.created_at) {
+          const date = new Date(order.created_at)
+          const monthYear = `${date.toLocaleString('default', { month: 'short' })} ${date.getFullYear()}`
+          if (!monthlyMap[monthYear]) {
+            monthlyMap[monthYear] = 0
+          }
+          monthlyMap[monthYear] += order.total_amount || 0
+        }
+      })
+      
+      const monthlyArray = Object.entries(monthlyMap).map(([month, revenue]) => ({
+        month,
+        revenue
+      }))
+      setMonthlyData(monthlyArray.slice(-6)) // Last 6 months
+    } catch (error) {
+      console.error('Error fetching monthly data:', error)
+      setMonthlyData([])
     }
   }
 
@@ -243,10 +321,20 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
   const safeNews = ensureArray(news)
   const salesByCategory = getSalesByCategory()
   const salesByMaterial = getSalesByMaterial()
+  
+  // Order status percentages for donut chart
+  const totalOrdersForChart = stats.pendingOrders + stats.processingOrders + stats.shippedOrders + stats.deliveredOrders + stats.cancelledOrders
+  const orderStatuses = [
+    { name: 'Pending', value: stats.pendingOrders, color: '#ff9800' },
+    { name: 'Processing', value: stats.processingOrders, color: '#2196f3' },
+    { name: 'Shipped', value: stats.shippedOrders, color: '#4caf50' },
+    { name: 'Delivered', value: stats.deliveredOrders, color: '#2e7d32' },
+    { name: 'Cancelled', value: stats.cancelledOrders, color: '#f44336' }
+  ].filter(s => s.value > 0)
 
   return (
     <div className="admin-panel">
-      {/* Admin Header with Logout and View Public Site button */}
+      {/* Admin Header */}
       <div className="admin-header">
         <div className="admin-header-left">
           <h1>👑 Admin Panel</h1>
@@ -279,8 +367,8 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
         <button className={activeTab === 'news' ? 'active' : ''} onClick={() => setActiveTab('news')}>
           📰 News & Blog
         </button>
-        <button className={activeTab === 'settings' ? 'active' : ''} onClick={() => setActiveTab('settings')}>
-          ⚙️ Settings
+        <button className={activeTab === 'statistics' ? 'active' : ''} onClick={() => setActiveTab('statistics')}>
+          📈 Statistics
         </button>
       </div>
 
@@ -313,18 +401,26 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
                 </div>
               </div>
               <div className="stat-card">
-                <div className="stat-icon">⏳</div>
-                <div className="stat-info">
-                  <h3>{stats.pendingOrders || 0}</h3>
-                  <p>Pending Orders</p>
-                </div>
-              </div>
-              <div className="stat-card">
                 <div className="stat-icon">💰</div>
                 <div className="stat-info">
                   <h3>₹{(stats.totalRevenue || 0).toLocaleString()}</h3>
                   <p>Total Revenue</p>
                 </div>
+              </div>
+            </div>
+
+            <div className="quick-stats">
+              <div className="quick-stat-card">
+                <h4>📈 Monthly Revenue</h4>
+                <p className="quick-stat-value">₹{(stats.monthlyRevenue || 0).toLocaleString()}</p>
+              </div>
+              <div className="quick-stat-card">
+                <h4>📊 Weekly Orders</h4>
+                <p className="quick-stat-value">{stats.weeklyOrders || 0}</p>
+              </div>
+              <div className="quick-stat-card">
+                <h4>⏳ Pending Orders</h4>
+                <p className="quick-stat-value">{stats.pendingOrders || 0}</p>
               </div>
             </div>
 
@@ -386,9 +482,8 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
                       </tr>
                     ))
                   ) : (
-                    <tr><td colSpan="5" style={{textAlign: 'center'}}>No orders found</td>
-                    </tr>
-                                      )}
+                    <tr><td colSpan="5" style={{textAlign: 'center'}}>No orders found</td></tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -584,21 +679,150 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
           </div>
         )}
 
-        {/* SETTINGS TAB */}
-        {activeTab === 'settings' && (
-          <div className="admin-settings">
-            <h2>Admin Settings</h2>
-            <div className="settings-card">
-              <h3>Site Settings</h3>
-              <p>Site Name: Siddhi Jewells</p>
-              <p>Admin Email: {user?.email || 'admin@siddhijewells.com'}</p>
-              <p>Total Products: {stats.totalProducts || 0}</p>
-              <p>Total Users: {stats.totalUsers || 0}</p>
+        {/* STATISTICS TAB - NEW */}
+        {activeTab === 'statistics' && (
+          <div className="admin-statistics">
+            <h2>📊 Statistics & Analytics</h2>
+            
+            {/* Revenue Stats */}
+            <div className="stats-summary">
+              <div className="summary-card">
+                <h3>💰 Total Revenue</h3>
+                <p className="summary-value">₹{(stats.totalRevenue || 0).toLocaleString()}</p>
+              </div>
+              <div className="summary-card">
+                <h3>📈 This Month</h3>
+                <p className="summary-value">₹{(stats.monthlyRevenue || 0).toLocaleString()}</p>
+              </div>
+              <div className="summary-card">
+                <h3>📦 Total Orders</h3>
+                <p className="summary-value">{stats.totalOrders || 0}</p>
+              </div>
+              <div className="summary-card">
+                <h3>👥 Total Users</h3>
+                <p className="summary-value">{stats.totalUsers || 0}</p>
+              </div>
             </div>
-            <div className="settings-card">
-              <h3>Actions</h3>
-              <button className="backup-btn">📥 Backup Database</button>
-              <button className="clear-cache-btn">🗑️ Clear Cache</button>
+
+            {/* Order Status Distribution */}
+            <div className="stats-charts-row">
+              <div className="stats-chart-card">
+                <h3>Order Status Distribution</h3>
+                <div className="status-distribution">
+                  <div className="status-bars">
+                    <div className="status-bar-item">
+                      <span className="status-label">Pending</span>
+                      <div className="status-bar-bg">
+                        <div className="status-bar-fill" style={{ width: `${(stats.pendingOrders / stats.totalOrders) * 100 || 0}%`, background: '#ff9800' }}></div>
+                      </div>
+                      <span className="status-count">{stats.pendingOrders}</span>
+                    </div>
+                    <div className="status-bar-item">
+                      <span className="status-label">Processing</span>
+                      <div className="status-bar-bg">
+                        <div className="status-bar-fill" style={{ width: `${(stats.processingOrders / stats.totalOrders) * 100 || 0}%`, background: '#2196f3' }}></div>
+                      </div>
+                      <span className="status-count">{stats.processingOrders}</span>
+                    </div>
+                    <div className="status-bar-item">
+                      <span className="status-label">Shipped</span>
+                      <div className="status-bar-bg">
+                        <div className="status-bar-fill" style={{ width: `${(stats.shippedOrders / stats.totalOrders) * 100 || 0}%`, background: '#4caf50' }}></div>
+                      </div>
+                      <span className="status-count">{stats.shippedOrders}</span>
+                    </div>
+                    <div className="status-bar-item">
+                      <span className="status-label">Delivered</span>
+                      <div className="status-bar-bg">
+                        <div className="status-bar-fill" style={{ width: `${(stats.deliveredOrders / stats.totalOrders) * 100 || 0}%`, background: '#2e7d32' }}></div>
+                      </div>
+                      <span className="status-count">{stats.deliveredOrders}</span>
+                    </div>
+                    <div className="status-bar-item">
+                      <span className="status-label">Cancelled</span>
+                      <div className="status-bar-bg">
+                        <div className="status-bar-fill" style={{ width: `${(stats.cancelledOrders / stats.totalOrders) * 100 || 0}%`, background: '#f44336' }}></div>
+                      </div>
+                      <span className="status-count">{stats.cancelledOrders}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="stats-chart-card">
+                <h3>Products by Category</h3>
+                <div className="pie-chart-simple">
+                  {Object.entries(salesByCategory).map(([category, count], index) => {
+                    const percentage = (count / safeProducts.length) * 100
+                    const colors = ['#8B4513', '#CD853F', '#D2691E', '#A0522D', '#FFD700']
+                    return (
+                      <div key={category} className="pie-segment-label">
+                        <span className="pie-color" style={{ background: colors[index % colors.length] }}></span>
+                        <span className="pie-name">{category}</span>
+                        <span className="pie-percent">{percentage.toFixed(1)}%</span>
+                        <span className="pie-count">({count})</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Monthly Revenue Trend */}
+            <div className="stats-chart-card full-width">
+              <h3>Monthly Revenue Trend</h3>
+              {monthlyData.length > 0 ? (
+                <div className="line-chart">
+                  {monthlyData.map((item, index) => {
+                    const maxRevenue = Math.max(...monthlyData.map(d => d.revenue), 1)
+                    const height = (item.revenue / maxRevenue) * 150
+                    return (
+                      <div key={index} className="bar-chart-column">
+                        <div className="bar-chart-bar" style={{ height: `${height}px` }}></div>
+                        <span className="bar-chart-label">{item.month}</span>
+                        <span className="bar-chart-value">₹{(item.revenue / 1000).toFixed(0)}k</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p style={{ textAlign: 'center', padding: '40px' }}>No order data available yet</p>
+              )}
+            </div>
+
+            {/* Quick Stats Grid */}
+            <div className="quick-insights">
+              <h3>Quick Insights</h3>
+              <div className="insights-grid">
+                <div className="insight-card">
+                  <div className="insight-icon">🔄</div>
+                  <div className="insight-info">
+                    <p className="insight-label">Avg Order Value</p>
+                    <p className="insight-value">₹{(stats.totalOrders ? (stats.totalRevenue / stats.totalOrders).toFixed(0) : 0).toLocaleString()}</p>
+                  </div>
+                </div>
+                <div className="insight-card">
+                  <div className="insight-icon">✅</div>
+                  <div className="insight-info">
+                    <p className="insight-label">Completion Rate</p>
+                    <p className="insight-value">{stats.totalOrders ? ((stats.deliveredOrders / stats.totalOrders) * 100).toFixed(1) : 0}%</p>
+                  </div>
+                </div>
+                <div className="insight-card">
+                  <div className="insight-icon">📊</div>
+                  <div className="insight-info">
+                    <p className="insight-label">Products/User</p>
+                    <p className="insight-value">{stats.totalUsers ? (stats.totalProducts / stats.totalUsers).toFixed(1) : 0}</p>
+                  </div>
+                </div>
+                <div className="insight-card">
+                  <div className="insight-icon">💰</div>
+                  <div className="insight-info">
+                    <p className="insight-label">Revenue/User</p>
+                    <p className="insight-value">₹{stats.totalUsers ? (stats.totalRevenue / stats.totalUsers).toFixed(0) : 0}</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}

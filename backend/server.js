@@ -225,15 +225,20 @@ const server = http.createServer((req, res) => {
         req.on('end', () => {
             try {
                 const { user_id, items, total } = JSON.parse(body);
+                console.log('📦 Creating order for user:', user_id, 'Total:', total);
+                
                 db.query('INSERT INTO orders (user_id, total_amount) VALUES (?, ?)', 
                     [user_id, total], 
                     (err, result) => {
                         if (err) {
+                            console.error('Order insert error:', err);
                             res.writeHead(500, { 'Content-Type': 'application/json' });
-                            res.end(JSON.stringify({ error: 'Database error' }));
+                            res.end(JSON.stringify({ error: 'Database error: ' + err.message }));
                             return;
                         }
                         const orderId = result.insertId;
+                        console.log('✅ Order created with ID:', orderId);
+                        
                         if (items && items.length > 0) {
                             items.forEach(item => {
                                 db.query('INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (?, ?, ?, ?)',
@@ -244,6 +249,7 @@ const server = http.createServer((req, res) => {
                         res.end(JSON.stringify({ orderId, message: 'Order placed successfully' }));
                     });
             } catch (error) {
+                console.error('Parse error:', error);
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'Invalid data' }));
             }
@@ -315,46 +321,38 @@ const server = http.createServer((req, res) => {
     
     // GET all news
     else if (pathname === '/api/news' && req.method === 'GET') {
-        console.log('📰 GET /api/news');
         db.query('SELECT * FROM news ORDER BY created_at DESC', (err, results) => {
             if (err) {
-                console.error('News GET error:', err);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'Database error' }));
                 return;
             }
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify(results || []));
+            res.end(JSON.stringify(results));
         });
     }
     
     // POST create news (Admin)
     else if (pathname === '/api/news' && req.method === 'POST') {
-        console.log('📝 POST /api/news');
         let body = '';
         req.on('data', chunk => body += chunk.toString());
         req.on('end', () => {
             try {
                 const { title, content, date, status } = JSON.parse(body);
-                console.log('News data:', { title, content: content?.substring(0, 50), date, status });
-                
                 db.query(
                     'INSERT INTO news (title, content, date, status) VALUES (?, ?, ?, ?)',
                     [title, content, date || new Date().toISOString(), status || 'published'],
                     (err, result) => {
                         if (err) {
-                            console.error('News insert error:', err);
                             res.writeHead(500, { 'Content-Type': 'application/json' });
-                            res.end(JSON.stringify({ error: 'Database error: ' + err.message }));
+                            res.end(JSON.stringify({ error: 'Database error' }));
                             return;
                         }
-                        console.log('✅ News inserted, ID:', result.insertId);
                         res.writeHead(201, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ id: result.insertId, message: 'News created' }));
                     }
                 );
             } catch (error) {
-                console.error('Parse error:', error);
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'Invalid JSON' }));
             }
@@ -364,11 +362,8 @@ const server = http.createServer((req, res) => {
     // DELETE news (Admin)
     else if (pathname.match(/^\/api\/news\/\d+$/) && req.method === 'DELETE') {
         const id = pathname.split('/').pop();
-        console.log('🗑️ DELETE /api/news/', id);
-        
         db.query('DELETE FROM news WHERE id = ?', [id], (err, result) => {
             if (err) {
-                console.error('News delete error:', err);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'Database error' }));
                 return;
@@ -393,8 +388,9 @@ server.listen(PORT, () => {
     console.log(`   - GET  /api/products`);
     console.log(`   - POST /api/register`);
     console.log(`   - POST /api/login`);
+    console.log(`   - GET  /api/orders`);
+    console.log(`   - POST /api/orders`);
     console.log(`   - GET  /api/news`);
     console.log(`   - POST /api/news`);
-    console.log(`   - DELETE /api/news/:id`);
     console.log(`\n`);
 });

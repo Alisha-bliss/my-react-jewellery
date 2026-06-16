@@ -292,6 +292,53 @@ function App() {
     alert('Logged out successfully!')
   }
 
+  // Place order function
+  const placeOrder = async () => {
+    // Check if user is logged in
+    if (!user) {
+      alert('Please login first to place your order!')
+      setShowLogin(true)
+      return false
+    }
+
+    // Check if cart is empty
+    if (cart.length === 0) {
+      alert('Your cart is empty!')
+      return false
+    }
+
+    try {
+      const response = await fetch('http://localhost:5001/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.id,
+          items: cart.map(item => ({
+            id: item.id,
+            quantity: item.quantity,
+            price: item.price
+          })),
+          total: getTotal()
+        })
+      })
+
+      if (response.ok) {
+        alert('Order placed successfully! Thank you for shopping with us!')
+        // Clear cart after successful order
+        setCart([])
+        return true
+      } else {
+        const error = await response.json()
+        alert('Failed to place order: ' + (error.error || 'Unknown error'))
+        return false
+      }
+    } catch (error) {
+      console.error('Error placing order:', error)
+      alert('Failed to place order. Please try again.')
+      return false
+    }
+  }
+
   const getGiftingProducts = () => getNonZodiacProducts().filter(p => p.price > 2000)
   const getBirthdayGiftProducts = () => products.filter(p => birthdayGiftNames.includes(p.name))
   const getWeddingProducts = () => products.filter(p => weddingProductNames.includes(p.name))
@@ -332,20 +379,23 @@ function App() {
     </button>
   )
 
-  // Check if we should show the top bar (not in admin panel)
-  const showTopBar = !(activePage === 'admin' && !isPublicView)
+  // Check if we should show the top bar (not in admin panel AND not in dashboard)
+  const showTopBar = !(activePage === 'admin' && !isPublicView) && activePage !== 'dashboard'
+
+  // Only show Header when NOT in admin panel AND NOT in dashboard
+  const showHeader = !(activePage === 'admin' && !isPublicView) && activePage !== 'dashboard'
 
   return (
     <div className="app">
-      {/* Top Bar - Only show when NOT in admin panel */}
+      {/* Top Bar - Only show when NOT in admin panel and NOT in dashboard */}
       {showTopBar && (
         <div className="top-bar">
           <p>✨ Free Shipping on orders above Rs. 10,000 all over inside the valley. ✨</p>
         </div>
       )}
 
-      {/* Only show Header when NOT in admin panel OR when in public view */}
-      {!(activePage === 'admin' && !isPublicView) && (
+      {/* Only show Header when NOT in admin panel and NOT in dashboard */}
+      {showHeader && (
         <Header 
           user={user}
           cartCount={cart.reduce((sum, item) => sum + item.quantity, 0)}
@@ -376,7 +426,7 @@ function App() {
             if (userData.role === 'admin') {
               setActivePage('admin')
             } else {
-              setActivePage('dashboard')
+              setActivePage('home')
             }
           }}
         />
@@ -479,7 +529,7 @@ function App() {
                 <div className="cart-summary-row"><span>Subtotal:</span><span>₹{getTotal()}</span></div>
                 <div className="cart-summary-row"><span>Shipping:</span><span>Free</span></div>
                 <div className="cart-summary-row.total"><span>Total:</span><span>₹{getTotal()}</span></div>
-                <button className="checkout-btn" onClick={() => alert('Order placed! Thank you!')}>Proceed to Checkout →</button>
+                <button className="checkout-btn" onClick={placeOrder}>Proceed to Checkout →</button>
               </div>
             </>
           )}
@@ -781,7 +831,7 @@ function App() {
         />
       )}
 
-      {/* USER DASHBOARD */}
+      {/* USER DASHBOARD - Full page - No header/footer */}
       {activePage === 'dashboard' && user && user.role !== 'admin' && (
         <UserDashboard 
           user={user}
@@ -789,6 +839,12 @@ function App() {
           addToCart={addToCart}
           toggleWishlist={toggleWishlist}
           onLogout={handleLogout}
+          cart={cart}
+          updateQuantity={updateQuantity}
+          removeFromCart={removeFromCart}
+          getTotal={getTotal}
+          onNavigate={navigateTo}
+          placeOrder={placeOrder}
         />
       )}
 

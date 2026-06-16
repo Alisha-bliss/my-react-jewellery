@@ -12,7 +12,7 @@ function Header({ user, cartCount, wishlistCount, onLoginClick, onNavigate, acti
   return (
     <header className="header">
       <div className="header-main">
-        <div className="logo">
+        <div className="logo" onClick={() => onNavigate('home')} style={{ cursor: 'pointer' }}>
           <div className="logo-brand">
             <span className="siddhi">SIDDHI</span>
             <span className="jewells">JEWELLS</span>
@@ -51,12 +51,13 @@ function Header({ user, cartCount, wishlistCount, onLoginClick, onNavigate, acti
           </div>
           
           <div className="header-actions">
-            <button className="action-icon" onClick={onLoginClick}>
+            {/* Profile Button - Directly goes to Dashboard when logged in */}
+            <button className="action-icon" onClick={() => user ? onNavigate('dashboard') : onLoginClick()}>
               <svg className="icon-svg" width="22" height="22" viewBox="0 0 24 24" fill="none">
                 <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.8" fill="none"/>
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="1.8" fill="none"/>
               </svg>
-              <span className="action-label">{user ? user.name : 'ACCOUNT'}</span>
+              <span className="action-label">{user ? user.name?.split(' ')[0] || user.name : 'ACCOUNT'}</span>
             </button>
             
             <button className="action-icon" onClick={() => onNavigate('wishlist')}>
@@ -95,7 +96,7 @@ function Header({ user, cartCount, wishlistCount, onLoginClick, onNavigate, acti
                 <div key={section} className="dropdown-section">
                   <h4>{section}</h4>
                   {items.map(item => (
-                    <button key={item} className="dropdown-item">{item}</button>
+                    <button key={item} className="dropdown-item" onClick={() => onNavigate('all')}>{item}</button>
                   ))}
                 </div>
               ))}
@@ -109,28 +110,9 @@ function Header({ user, cartCount, wishlistCount, onLoginClick, onNavigate, acti
         <button onClick={() => onNavigate('blog')} className={activePage === 'blog' ? 'active-nav' : ''}>BLOG</button>
         <button onClick={() => onNavigate('sale')} className={activePage === 'sale' ? 'active-nav' : ''}>SALE</button>
         
-        {/* If admin is viewing public site, show Admin Panel and Logout buttons side by side */}
         {user && user.role === 'admin' && isPublicView && (
-          <div style={{ display: 'flex', gap: '10px', marginLeft: '10px' }}>
-            <button 
-              onClick={onGoBackToAdmin} 
-              style={{ background: '#8B4513', color: 'white', padding: '8px 20px', borderRadius: '25px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
-            >
-              👑 ADMIN PANEL
-            </button>
-            <button 
-              onClick={onLogout} 
-              style={{ background: '#dc3545', color: 'white', padding: '8px 20px', borderRadius: '25px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
-            >
-              LOGOUT
-            </button>
-          </div>
-        )}
-        
-        {/* Show DASHBOARD button for regular users */}
-        {user && user.role !== 'admin' && (
-          <button onClick={() => onNavigate('dashboard')} className={activePage === 'dashboard' ? 'active-nav' : ''}>
-            MY DASHBOARD
+          <button onClick={onGoBackToAdmin} style={{ background: '#8B4513', color: 'white', padding: '8px 20px', borderRadius: '25px' }}>
+            👑 ADMIN PANEL
           </button>
         )}
       </nav>
