@@ -85,13 +85,13 @@ function ProductDetail({ product, addToCart, onClose, onNavigate }) {
           </div>
 
           <div className="product-price-detail">
-            <span className="current-price">₹{product.price}</span>
-            <span className="original-price">₹{Math.round(product.price * 1.3)}</span>
+            <span className="current-price">Rs. {product.price}</span>
+<span className="original-price">Rs. {Math.round(product.price * 1.3)}</span>
             <span className="discount-badge">-30%</span>
           </div>
 
           <div className="product-tax-info">
-            <span>₹{Math.round(product.price * 1.18)}</span> incl. of all taxes
+            <span>Rs. {Math.round(product.price * 1.18)}</span> incl. of all taxes
           </div>
 
           <div className="product-material-info">

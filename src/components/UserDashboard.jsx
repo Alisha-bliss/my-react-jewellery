@@ -206,7 +206,7 @@ function UserDashboard({ user, wishlist, addToCart, toggleWishlist, onLogout, ca
                       <div className="recent-order-status" style={{ color: statusInfo.color }}>
                         {statusInfo.icon} {statusInfo.text}
                       </div>
-                      <div className="recent-order-amount">₹{order.total_amount || 0}</div>
+                      <div className="recent-order-amount">Rs. {order.total_amount || 0}</div>
                     </div>
                   )
                 })}
@@ -251,13 +251,13 @@ function UserDashboard({ user, wishlist, addToCart, toggleWishlist, onLogout, ca
                               <h4>Jewellery Item</h4>
                               <p>Quantity: 1</p>
                             </div>
-                            <div className="item-price">₹{order.total_amount || 0}</div>
+                            <div className="item-price">Rs. {order.total_amount || 0}</div>
                           </div>
                         </div>
                         <div className="order-footer-dash">
                           <div className="order-total">
                             <span>Total:</span>
-                            <strong>₹{order.total_amount || 0}</strong>
+                            <strong>Rs. {order.total_amount || 0}</strong>
                           </div>
                           <div className="order-actions-dash">
                             {canCancel && (
@@ -293,7 +293,7 @@ function UserDashboard({ user, wishlist, addToCart, toggleWishlist, onLogout, ca
                       <div className="wishlist-info-dash">
                         <h4>{product.name}</h4>
                         <p className="material-dash">{product.material}</p>
-                        <p className="price-dash">₹{product.price}</p>
+                        <p className="price-dash">Rs. {product.price}</p>
                         <div className="wishlist-buttons-dash">
                           <button className="add-to-cart-dash" onClick={() => {
                             addToCart(product)
@@ -329,7 +329,7 @@ function UserDashboard({ user, wishlist, addToCart, toggleWishlist, onLogout, ca
                         <div className="cart-item-info-dash">
                           <h4>{item.name}</h4>
                           <p>{item.material}</p>
-                          <p className="cart-item-price-dash">₹{item.price}</p>
+                          <p className="cart-item-price-dash">Rs. {item.price}</p>
                         </div>
                         <div className="cart-item-quantity-dash">
                           <button onClick={() => updateQuantity(item.id, item.quantity - 1)}>-</button>
@@ -337,7 +337,7 @@ function UserDashboard({ user, wishlist, addToCart, toggleWishlist, onLogout, ca
                           <button onClick={() => updateQuantity(item.id, item.quantity + 1)}>+</button>
                         </div>
                         <div className="cart-item-total-dash">
-                          <p>₹{item.price * item.quantity}</p>
+                          <p>Rs. {item.price * item.quantity}</p>
                           <button className="remove-item-dash" onClick={() => removeFromCart(item.id)}>🗑️</button>
                         </div>
                       </div>
@@ -346,7 +346,7 @@ function UserDashboard({ user, wishlist, addToCart, toggleWishlist, onLogout, ca
                   <div className="cart-summary-dash">
                     <div className="cart-summary-row">
                       <span>Subtotal:</span>
-                      <span>₹{cartTotal}</span>
+                      <span>Rs. {cartTotal}</span>
                     </div>
                     <div className="cart-summary-row">
                       <span>Shipping:</span>
@@ -354,7 +354,7 @@ function UserDashboard({ user, wishlist, addToCart, toggleWishlist, onLogout, ca
                     </div>
                     <div className="cart-summary-row total">
                       <span>Total:</span>
-                      <span>₹{cartTotal}</span>
+                      <span>Rs. {cartTotal}</span>
                     </div>
                     <button className="checkout-dash" onClick={handleCheckout}>Proceed to Checkout →</button>
                   </div>

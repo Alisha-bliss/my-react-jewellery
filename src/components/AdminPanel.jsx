@@ -5,6 +5,8 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
   const [editingProduct, setEditingProduct] = useState(null)
   const [showAddForm, setShowAddForm] = useState(false)
   const [activeTab, setActiveTab] = useState('dashboard')
+  const [showStatsModal, setShowStatsModal] = useState(false)
+  const [statsModalData, setStatsModalData] = useState({ title: '', data: [], type: '' })
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalProducts: 0,
@@ -24,6 +26,7 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
   const [newNews, setNewNews] = useState({ title: '', content: '', date: '' })
   const [showNewsForm, setShowNewsForm] = useState(false)
   const [monthlyData, setMonthlyData] = useState([])
+  const [monthlyOrdersData, setMonthlyOrdersData] = useState({})
   
   const [newProduct, setNewProduct] = useState({
     name: '', category: '', material: '', price: '', description: '', image_url: '', stock: ''
@@ -32,6 +35,46 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
   // Helper function to ensure data is always an array
   const ensureArray = (data) => {
     return Array.isArray(data) ? data : []
+  }
+
+  // Format date to Nepal time (UTC+5:45) - FIXED
+  const formatNepalTime = (dateString) => {
+    if (!dateString) return 'N/A'
+    const date = new Date(dateString)
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'Asia/Kathmandu'
+    })
+  }
+
+  // Format date for month grouping (Nepal time) - FIXED
+  const getMonthYear = (dateString) => {
+    if (!dateString) return ''
+    const date = new Date(dateString)
+    return date.toLocaleString('default', { 
+      month: 'long',
+      timeZone: 'Asia/Kathmandu'
+    }) + ' ' + date.toLocaleString('default', { 
+      year: 'numeric',
+      timeZone: 'Asia/Kathmandu'
+    })
+  }
+
+  const getMonthYearShort = (dateString) => {
+    if (!dateString) return ''
+    const date = new Date(dateString)
+    return date.toLocaleString('default', { 
+      month: 'short',
+      timeZone: 'Asia/Kathmandu'
+    }) + ' ' + date.toLocaleString('default', { 
+      year: 'numeric',
+      timeZone: 'Asia/Kathmandu'
+    })
   }
 
   // Fetch stats
@@ -64,25 +107,38 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
       const deliveredOrders = safeOrders.filter(o => o && o.status === 'delivered').length
       const cancelledOrders = safeOrders.filter(o => o && o.status === 'cancelled').length
       
-      // Calculate revenue
-      const totalRevenue = safeOrders.reduce((sum, o) => sum + (o?.total_amount || 0), 0)
+      // Calculate revenue ONLY from DELIVERED orders
+      const totalRevenue = safeOrders
+        .filter(o => o && o.status === 'delivered')
+        .reduce((sum, o) => sum + parseFloat(o?.total_amount || 0), 0)
       
-      // Get current month revenue
-      const currentMonth = new Date().getMonth()
-      const currentYear = new Date().getFullYear()
+      // Get current month revenue ONLY from DELIVERED orders (Nepal time) - FIXED
+      const now = new Date()
+      const currentMonth = parseInt(now.toLocaleString('default', { month: 'numeric', timeZone: 'Asia/Kathmandu' })) - 1
+      const currentYear = parseInt(now.toLocaleString('default', { year: 'numeric', timeZone: 'Asia/Kathmandu' }))
+      
       const monthlyRevenue = safeOrders
         .filter(o => {
+          if (!o || !o.created_at) return false
+          if (o.status !== 'delivered') return false
           const orderDate = new Date(o.created_at)
-          return orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear
+          const orderMonth = parseInt(orderDate.toLocaleString('default', { month: 'numeric', timeZone: 'Asia/Kathmandu' })) - 1
+          const orderYear = parseInt(orderDate.toLocaleString('default', { year: 'numeric', timeZone: 'Asia/Kathmandu' }))
+          return orderMonth === currentMonth && orderYear === currentYear
         })
-        .reduce((sum, o) => sum + (o?.total_amount || 0), 0)
+        .reduce((sum, o) => sum + parseFloat(o?.total_amount || 0), 0)
       
-      // Get weekly orders (last 7 days)
-      const weekAgo = new Date()
+      // Get weekly orders (last 7 days) - ALL orders (Nepal time) - FIXED
+      const nowNepal = new Date()
+      nowNepal.setHours(0, 0, 0, 0)
+      const weekAgo = new Date(nowNepal)
       weekAgo.setDate(weekAgo.getDate() - 7)
+      
       const weeklyOrders = safeOrders.filter(o => {
+        if (!o || !o.created_at) return false
         const orderDate = new Date(o.created_at)
-        return orderDate >= weekAgo
+        const orderDateNepal = new Date(orderDate.toLocaleString('en-US', { timeZone: 'Asia/Kathmandu' }))
+        return orderDateNepal >= weekAgo
       }).length
       
       setStats({
@@ -155,16 +211,35 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
       const ordersData = await ordersRes.json()
       const safeOrders = ensureArray(ordersData)
       
-      // Group orders by month
+      // Group orders by month for DELIVERED orders only (for revenue)
       const monthlyMap = {}
+      // Group orders by month with full details (for monthly orders view)
+      const monthlyOrdersMap = {}
+      
       safeOrders.forEach(order => {
         if (order && order.created_at) {
-          const date = new Date(order.created_at)
-          const monthYear = `${date.toLocaleString('default', { month: 'short' })} ${date.getFullYear()}`
-          if (!monthlyMap[monthYear]) {
-            monthlyMap[monthYear] = 0
+          const monthYear = getMonthYear(order.created_at) // e.g., "June 2026"
+          const monthYearShort = getMonthYearShort(order.created_at) // e.g., "Jun 2026"
+          
+          // For revenue chart - only delivered orders
+          if (order.status === 'delivered') {
+            if (!monthlyMap[monthYearShort]) {
+              monthlyMap[monthYearShort] = 0
+            }
+            monthlyMap[monthYearShort] += parseFloat(order.total_amount || 0)
           }
-          monthlyMap[monthYear] += order.total_amount || 0
+          
+          // For monthly orders detail - all orders with details
+          if (!monthlyOrdersMap[monthYear]) {
+            monthlyOrdersMap[monthYear] = []
+          }
+          monthlyOrdersMap[monthYear].push({
+            id: order.id,
+            user_id: order.user_id,
+            amount: order.total_amount,
+            status: order.status,
+            date: order.created_at
+          })
         }
       })
       
@@ -172,10 +247,21 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
         month,
         revenue
       }))
+      
+      // Sort by month order
+      const monthOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+      monthlyArray.sort((a, b) => {
+        const aMonth = a.month.split(' ')[0]
+        const bMonth = b.month.split(' ')[0]
+        return monthOrder.indexOf(aMonth) - monthOrder.indexOf(bMonth)
+      })
+      
       setMonthlyData(monthlyArray.slice(-6)) // Last 6 months
+      setMonthlyOrdersData(monthlyOrdersMap)
     } catch (error) {
       console.error('Error fetching monthly data:', error)
       setMonthlyData([])
+      setMonthlyOrdersData({})
     }
   }
 
@@ -314,6 +400,85 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
     return materials
   }
 
+  // Handle stat card click
+  const handleStatClick = (type) => {
+    let title = ''
+    let data = []
+    
+    switch(type) {
+      case 'users':
+        title = 'All Users'
+        data = users.map(u => ({ id: u.id, name: u.name || 'N/A', email: u.email || 'N/A', role: u.role || 'user' }))
+        break
+      case 'products':
+        title = 'All Products'
+        data = products.map(p => ({ id: p.id, name: p.name, price: p.price, category: p.category, material: p.material }))
+        break
+      case 'orders':
+        title = 'All Orders'
+        data = orders.map(o => ({ id: o.id, user_id: o.user_id, total: o.total_amount, status: o.status, date: formatNepalTime(o.created_at) }))
+        break
+      case 'revenue':
+        title = 'Revenue Details (Delivered Orders Only)'
+        data = orders
+          .filter(o => o.status === 'delivered')
+          .map(o => ({ id: o.id, user_id: o.user_id, amount: o.total_amount, date: formatNepalTime(o.created_at) }))
+        break
+      case 'monthly':
+        title = 'Monthly Revenue Details (Delivered Orders Only)'
+        data = monthlyData.map(m => ({ month: m.month, revenue: m.revenue }))
+        break
+      case 'pending':
+        title = 'Pending Orders'
+        data = orders.filter(o => o.status === 'pending').map(o => ({ id: o.id, user_id: o.user_id, total: o.total_amount, date: formatNepalTime(o.created_at) }))
+        break
+      case 'monthlyorders':
+        title = `Orders for ${statsModalData.month || ''}`
+        const monthKey = statsModalData.month || ''
+        data = monthlyOrdersData[monthKey] ? monthlyOrdersData[monthKey].map(o => ({ 
+          id: o.id, 
+          user_id: o.user_id, 
+          amount: o.amount, 
+          status: o.status, 
+          date: formatNepalTime(o.date) 
+        })) : []
+        break
+      default:
+        return
+    }
+    
+    setStatsModalData({ title, data, type, month: statsModalData.month || '' })
+    setShowStatsModal(true)
+  }
+
+  // Handle monthly order click - show details for that month
+  const handleMonthlyOrderClick = (month) => {
+    // Find the full month name from the short month name
+    const monthMap = {
+      'Jan': 'January', 'Feb': 'February', 'Mar': 'March', 'Apr': 'April',
+      'May': 'May', 'Jun': 'June', 'Jul': 'July', 'Aug': 'August',
+      'Sep': 'September', 'Oct': 'October', 'Nov': 'November', 'Dec': 'December'
+    }
+    
+    const monthParts = month.split(' ')
+    const shortMonth = monthParts[0]
+    const year = monthParts[1]
+    const fullMonth = monthMap[shortMonth] || shortMonth
+    const fullMonthKey = `${fullMonth} ${year}`
+    
+    const title = `Orders for ${month}`
+    const data = monthlyOrdersData[fullMonthKey] ? monthlyOrdersData[fullMonthKey].map(o => ({ 
+      id: o.id, 
+      user_id: o.user_id, 
+      amount: o.amount, 
+      status: o.status, 
+      date: formatNepalTime(o.date) 
+    })) : []
+    
+    setStatsModalData({ title, data, type: 'monthlyorders', month })
+    setShowStatsModal(true)
+  }
+
   // Safe arrays for rendering
   const safeOrders = ensureArray(orders)
   const safeProducts = ensureArray(products)
@@ -321,20 +486,9 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
   const safeNews = ensureArray(news)
   const salesByCategory = getSalesByCategory()
   const salesByMaterial = getSalesByMaterial()
-  
-  // Order status percentages for donut chart
-  const totalOrdersForChart = stats.pendingOrders + stats.processingOrders + stats.shippedOrders + stats.deliveredOrders + stats.cancelledOrders
-  const orderStatuses = [
-    { name: 'Pending', value: stats.pendingOrders, color: '#ff9800' },
-    { name: 'Processing', value: stats.processingOrders, color: '#2196f3' },
-    { name: 'Shipped', value: stats.shippedOrders, color: '#4caf50' },
-    { name: 'Delivered', value: stats.deliveredOrders, color: '#2e7d32' },
-    { name: 'Cancelled', value: stats.cancelledOrders, color: '#f44336' }
-  ].filter(s => s.value > 0)
 
   return (
     <div className="admin-panel">
-      {/* Admin Header */}
       <div className="admin-header">
         <div className="admin-header-left">
           <h1>👑 Admin Panel</h1>
@@ -342,15 +496,14 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
         </div>
         <div className="admin-header-right">
           <button className="public-site-btn" onClick={onGoToPublicView}>
-             View Public Site
+            🌐 View Public Site
           </button>
           <button className="admin-logout-btn" onClick={onLogout}>
-             Logout
+            🚪 Logout
           </button>
         </div>
       </div>
 
-      {/* Admin Navigation */}
       <div className="admin-navbar">
         <button className={activeTab === 'dashboard' ? 'active' : ''} onClick={() => setActiveTab('dashboard')}>
           📊 Dashboard
@@ -379,46 +532,46 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
             <h2>Dashboard Overview</h2>
             
             <div className="stats-grid">
-              <div className="stat-card">
+              <div className="stat-card clickable" onClick={() => handleStatClick('users')}>
                 <div className="stat-icon">👥</div>
                 <div className="stat-info">
                   <h3>{stats.totalUsers || 0}</h3>
                   <p>Total Users</p>
                 </div>
               </div>
-              <div className="stat-card">
+              <div className="stat-card clickable" onClick={() => handleStatClick('products')}>
                 <div className="stat-icon">🛍️</div>
                 <div className="stat-info">
                   <h3>{stats.totalProducts || 0}</h3>
                   <p>Total Products</p>
                 </div>
               </div>
-              <div className="stat-card">
+              <div className="stat-card clickable" onClick={() => handleStatClick('orders')}>
                 <div className="stat-icon">📦</div>
                 <div className="stat-info">
                   <h3>{stats.totalOrders || 0}</h3>
                   <p>Total Orders</p>
                 </div>
               </div>
-              <div className="stat-card">
+              <div className="stat-card clickable" onClick={() => handleStatClick('revenue')}>
                 <div className="stat-icon">💰</div>
                 <div className="stat-info">
-                  <h3>₹{(stats.totalRevenue || 0).toLocaleString()}</h3>
+                  <h3>Rs. {(stats.totalRevenue || 0).toLocaleString()}</h3>
                   <p>Total Revenue</p>
                 </div>
               </div>
             </div>
 
             <div className="quick-stats">
-              <div className="quick-stat-card">
+              <div className="quick-stat-card clickable" onClick={() => handleStatClick('monthly')}>
                 <h4>📈 Monthly Revenue</h4>
-                <p className="quick-stat-value">₹{(stats.monthlyRevenue || 0).toLocaleString()}</p>
+                <p className="quick-stat-value">Rs. {(stats.monthlyRevenue || 0).toLocaleString()}</p>
               </div>
-              <div className="quick-stat-card">
-                <h4>📊 Weekly Orders</h4>
-                <p className="quick-stat-value">{stats.weeklyOrders || 0}</p>
+              <div className="quick-stat-card clickable" onClick={() => handleStatClick('monthlyorders')}>
+                <h4>📊 Monthly Orders</h4>
+                <p className="quick-stat-value">{stats.totalOrders || 0}</p>
               </div>
-              <div className="quick-stat-card">
+              <div className="quick-stat-card clickable" onClick={() => handleStatClick('pending')}>
                 <h4>⏳ Pending Orders</h4>
                 <p className="quick-stat-value">{stats.pendingOrders || 0}</p>
               </div>
@@ -467,8 +620,8 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
                     safeOrders.slice(0, 5).map(order => (
                       <tr key={order.id}>
                         <td>#{order.id}</td>
-                        <td>{order.created_at ? new Date(order.created_at).toLocaleDateString() : 'N/A'}</td>
-                        <td>₹{order.total_amount || 0}</td>
+                        <td>{formatNepalTime(order.created_at)}</td>
+                        <td>Rs. {order.total_amount || 0}</td>
                         <td><span className={`status-badge ${order.status || 'pending'}`}>{order.status || 'pending'}</span></td>
                         <td>
                           <select onChange={(e) => updateOrderStatus(order.id, e.target.value)} value={order.status || 'pending'}>
@@ -504,8 +657,8 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
                     <tr key={order.id}>
                       <td>#{order.id}</td>
                       <td>User #{order.user_id}</td>
-                      <td>{order.created_at ? new Date(order.created_at).toLocaleDateString() : 'N/A'}</td>
-                      <td>₹{order.total_amount || 0}</td>
+                      <td>{formatNepalTime(order.created_at)}</td>
+                      <td>Rs. {order.total_amount || 0}</td>
                       <td><span className={`status-badge ${order.status || 'pending'}`}>{order.status || 'pending'}</span></td>
                       <td>
                         <select onChange={(e) => updateOrderStatus(order.id, e.target.value)} value={order.status || 'pending'}>
@@ -555,7 +708,7 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
                       <option value="Crystal">Crystal</option>
                       <option value="Gemstone">Gemstone</option>
                     </select>
-                    <input type="number" placeholder="Price (₹)" value={newProduct.price} onChange={(e) => setNewProduct({...newProduct, price: e.target.value})} required />
+                    <input type="number" placeholder="Price (Rs.)" value={newProduct.price} onChange={(e) => setNewProduct({...newProduct, price: e.target.value})} required />
                     <textarea placeholder="Description" value={newProduct.description} onChange={(e) => setNewProduct({...newProduct, description: e.target.value})} rows="2"></textarea>
                     <input type="text" placeholder="Image URL" value={newProduct.image_url} onChange={(e) => setNewProduct({...newProduct, image_url: e.target.value})} />
                     <input type="number" placeholder="Stock" value={newProduct.stock} onChange={(e) => setNewProduct({...newProduct, stock: e.target.value})} />
@@ -575,7 +728,7 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
                     <img src={product.image_url} alt={product.name} onError={(e) => e.target.src = 'https://via.placeholder.com/100'} />
                     <div className="product-info">
                       <h4>{product.name}</h4>
-                      <p>₹{product.price} | Stock: {product.stock || 0}</p>
+                      <p>Rs. {product.price} | Stock: {product.stock || 0}</p>
                       <p className="product-meta">{product.material} | {product.category}</p>
                     </div>
                     <div className="product-actions">
@@ -607,7 +760,7 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
                       <td>{user.name || 'N/A'}</td>
                       <td>{user.email || 'N/A'}</td>
                       <td><span className={`role-badge ${user.role || 'user'}`}>{user.role || 'user'}</span></td>
-                      <td>{user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</td>
+                      <td>{formatNepalTime(user.created_at)}</td>
                     </tr>
                   ))
                 ) : (
@@ -660,7 +813,7 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
                   <div key={item.id} className="news-card">
                     <div className="news-header">
                       <h3>📄 {item.title}</h3>
-                      <span className="news-date">📅 {item.date ? new Date(item.date).toLocaleDateString() : 'New'}</span>
+                      <span className="news-date">📅 {formatNepalTime(item.date)}</span>
                     </div>
                     <p>{item.content?.substring(0, 200)}...</p>
                     <div className="news-actions">
@@ -679,32 +832,53 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
           </div>
         )}
 
-        {/* STATISTICS TAB - NEW */}
+        {/* STATISTICS TAB */}
         {activeTab === 'statistics' && (
           <div className="admin-statistics">
             <h2>📊 Statistics & Analytics</h2>
             
-            {/* Revenue Stats */}
             <div className="stats-summary">
-              <div className="summary-card">
+              <div className="summary-card clickable" onClick={() => handleStatClick('revenue')}>
                 <h3>💰 Total Revenue</h3>
-                <p className="summary-value">₹{(stats.totalRevenue || 0).toLocaleString()}</p>
+                <p className="summary-value">Rs. {(stats.totalRevenue || 0).toLocaleString()}</p>
               </div>
-              <div className="summary-card">
+              <div className="summary-card clickable" onClick={() => handleStatClick('monthly')}>
                 <h3>📈 This Month</h3>
-                <p className="summary-value">₹{(stats.monthlyRevenue || 0).toLocaleString()}</p>
+                <p className="summary-value">Rs. {(stats.monthlyRevenue || 0).toLocaleString()}</p>
               </div>
-              <div className="summary-card">
+              <div className="summary-card clickable" onClick={() => handleStatClick('orders')}>
                 <h3>📦 Total Orders</h3>
                 <p className="summary-value">{stats.totalOrders || 0}</p>
               </div>
-              <div className="summary-card">
+              <div className="summary-card clickable" onClick={() => handleStatClick('users')}>
                 <h3>👥 Total Users</h3>
                 <p className="summary-value">{stats.totalUsers || 0}</p>
               </div>
             </div>
 
-            {/* Order Status Distribution */}
+            {/* Monthly Revenue Chart with Clickable Bars */}
+            <div className="stats-chart-card full-width">
+              <h3>Monthly Revenue Trend (Click on a month to view orders)</h3>
+              {monthlyData.length > 0 ? (
+                <div className="line-chart">
+                  {monthlyData.map((item, index) => {
+                    const maxRevenue = Math.max(...monthlyData.map(d => d.revenue), 1)
+                    const height = (item.revenue / maxRevenue) * 150
+                    const monthName = item.month
+                    return (
+                      <div key={index} className="bar-chart-column clickable" onClick={() => handleMonthlyOrderClick(monthName)}>
+                        <div className="bar-chart-bar" style={{ height: `${height}px` }}></div>
+                        <span className="bar-chart-label">{item.month}</span>
+                        <span className="bar-chart-value">Rs. {(item.revenue / 1000).toFixed(0)}k</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p style={{ textAlign: 'center', padding: '40px' }}>No order data available yet</p>
+              )}
+            </div>
+
             <div className="stats-charts-row">
               <div className="stats-chart-card">
                 <h3>Order Status Distribution</h3>
@@ -768,29 +942,6 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
               </div>
             </div>
 
-            {/* Monthly Revenue Trend */}
-            <div className="stats-chart-card full-width">
-              <h3>Monthly Revenue Trend</h3>
-              {monthlyData.length > 0 ? (
-                <div className="line-chart">
-                  {monthlyData.map((item, index) => {
-                    const maxRevenue = Math.max(...monthlyData.map(d => d.revenue), 1)
-                    const height = (item.revenue / maxRevenue) * 150
-                    return (
-                      <div key={index} className="bar-chart-column">
-                        <div className="bar-chart-bar" style={{ height: `${height}px` }}></div>
-                        <span className="bar-chart-label">{item.month}</span>
-                        <span className="bar-chart-value">₹{(item.revenue / 1000).toFixed(0)}k</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              ) : (
-                <p style={{ textAlign: 'center', padding: '40px' }}>No order data available yet</p>
-              )}
-            </div>
-
-            {/* Quick Stats Grid */}
             <div className="quick-insights">
               <h3>Quick Insights</h3>
               <div className="insights-grid">
@@ -798,7 +949,7 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
                   <div className="insight-icon">🔄</div>
                   <div className="insight-info">
                     <p className="insight-label">Avg Order Value</p>
-                    <p className="insight-value">₹{(stats.totalOrders ? (stats.totalRevenue / stats.totalOrders).toFixed(0) : 0).toLocaleString()}</p>
+                    <p className="insight-value">Rs. {(stats.totalOrders ? (stats.totalRevenue / stats.totalOrders).toFixed(0) : 0).toLocaleString()}</p>
                   </div>
                 </div>
                 <div className="insight-card">
@@ -819,7 +970,7 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
                   <div className="insight-icon">💰</div>
                   <div className="insight-info">
                     <p className="insight-label">Revenue/User</p>
-                    <p className="insight-value">₹{stats.totalUsers ? (stats.totalRevenue / stats.totalUsers).toFixed(0) : 0}</p>
+                    <p className="insight-value">Rs. {stats.totalUsers ? (stats.totalRevenue / stats.totalUsers).toFixed(0) : 0}</p>
                   </div>
                 </div>
               </div>
@@ -827,6 +978,55 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
           </div>
         )}
       </div>
+
+      {/* Stats Detail Modal */}
+      {showStatsModal && (
+        <div className="modal-overlay" onClick={() => setShowStatsModal(false)}>
+          <div className="modal-content stats-detail-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{statsModalData.title}</h2>
+              <button className="close-modal-btn" onClick={() => setShowStatsModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              {statsModalData.data.length === 0 ? (
+                <p className="no-data-msg">No data available</p>
+              ) : (
+                <div className="stats-table-wrap">
+                  <table className="stats-detail-table">
+                    <thead>
+                      <tr>
+                        {Object.keys(statsModalData.data[0]).map(key => (
+                          <th key={key}>{key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {statsModalData.data.map((item, index) => (
+                        <tr key={index}>
+                          {Object.values(item).map((value, i) => {
+                            const key = Object.keys(item)[i]
+                            const isIdField = key === 'id' || key === 'user_id' || key === 'status' || key === 'month'
+                            const isNumericPrice = typeof value === 'number' && (key === 'amount' || key === 'revenue' || key === 'price' || key === 'total')
+                            return (
+                              <td key={i}>
+                                {isNumericPrice && !isIdField ? `Rs. ${value.toLocaleString()}` :
+                                 value || 'N/A'}
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="close-modal-footer-btn" onClick={() => setShowStatsModal(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit Product Modal */}
       {editingProduct && (

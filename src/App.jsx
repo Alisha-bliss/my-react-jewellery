@@ -83,11 +83,11 @@ function App() {
   const matchesPriceRange = (price, range) => {
     if (!range) return true
     switch(range) {
-      case 'Under ₹2000': return price < 2000
-      case '₹2000 - ₹5000': return price >= 2000 && price <= 5000
-      case '₹5000 - ₹10000': return price >= 5000 && price <= 10000
-      case '₹10000 - ₹15000': return price >= 10000 && price <= 15000
-      case 'Above ₹15000': return price > 15000
+      case 'Under Rs. 2000': return price < 2000
+      case 'Rs. 2000 - Rs. 5000': return price >= 2000 && price <= 5000
+      case 'Rs. 5000 - Rs. 10000': return price >= 5000 && price <= 10000
+      case 'Rs. 10000 - Rs. 15000': return price >= 10000 && price <= 15000
+      case 'Above Rs. 15000': return price > 15000
       default: return true
     }
   }
@@ -117,7 +117,7 @@ function App() {
 
   const categoryItems = {
     'Jewellery Types': ['Rings', 'Necklaces', 'Earrings', 'Bracelets', 'Pendants', 'Anklets'],
-    'Price Range': ['Under ₹2000', '₹2000 - ₹5000', '₹5000 - ₹10000', '₹10000 - ₹15000', 'Above ₹15000'],
+    'Price Range': ['Under Rs. 2000', 'Rs. 2000 - Rs. 5000', 'Rs. 5000 - Rs. 10000', 'Rs. 10000 - Rs. 15000', 'Above Rs. 15000'],
     'Collections': ['Silver', 'Copper', 'Crystal', 'Gemstone']
   }
 
@@ -537,7 +537,7 @@ function App() {
                     <div className="cart-item-details">
                       <h3>{item.name}</h3>
                       <p>{item.material}</p>
-                      <p className="cart-item-price">₹{item.price}</p>
+                      <p className="cart-item-price">Rs. {item.price}</p>
                     </div>
                     <div className="cart-item-quantity">
                       <button onClick={() => updateQuantity(item.id, item.quantity - 1)}>-</button>
@@ -545,16 +545,16 @@ function App() {
                       <button onClick={() => updateQuantity(item.id, item.quantity + 1)}>+</button>
                     </div>
                     <div className="cart-item-total">
-                      <p>₹{item.price * item.quantity}</p>
+                      <p>Rs. {item.price * item.quantity}</p>
                       <button className="remove-item-btn" onClick={() => removeFromCart(item.id)}>🗑️</button>
                     </div>
                   </div>
                 ))}
               </div>
               <div className="cart-summary">
-                <div className="cart-summary-row"><span>Subtotal:</span><span>₹{getTotal()}</span></div>
+                <div className="cart-summary-row"><span>Subtotal:</span><span>Rs. {getTotal()}</span></div>
                 <div className="cart-summary-row"><span>Shipping:</span><span>Free</span></div>
-                <div className="cart-summary-row.total"><span>Total:</span><span>₹{getTotal()}</span></div>
+                <div className="cart-summary-row.total"><span>Total:</span><span>Rs. {getTotal()}</span></div>
                 <button className="checkout-btn" onClick={placeOrder}>Proceed to Checkout →</button>
               </div>
             </>
@@ -576,7 +576,7 @@ function App() {
                   <img src={product.image_url} alt={product.name} onClick={() => openProductDetail(product)} />
                   <h3>{product.name}</h3>
                   <p className="material">{product.material} | {product.category}</p>
-                  <div className="price-row"><span className="price">₹{product.price}</span></div>
+                  <div className="price-row"><span className="price">Rs. {product.price}</span></div>
                   <div className="product-buttons">
                     <button onClick={() => addToCart(product)}>Add to Cart 🛒</button>
                     <WishlistHeart isActive={true} onClick={() => toggleWishlist(product)} />
@@ -768,8 +768,8 @@ function App() {
                 <h3>{product.name}</h3>
                 <p className="material">{product.material}</p>
                 <div className="price-row">
-                  <span className="price">₹{Math.round(product.price * 0.5)}</span>
-                  <span className="original-price">₹{product.price}</span>
+                  <span className="price">Rs. {Math.round(product.price * 0.5)}</span>
+                  <span className="original-price">Rs. {product.price}</span>
                   <span className="discount">-50%</span>
                 </div>
                 <div className="product-buttons">

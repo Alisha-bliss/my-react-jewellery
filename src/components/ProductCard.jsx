@@ -6,8 +6,8 @@ function ProductCard({ product, onAddToCart, onToggleWishlist, isInWishlist, onI
       <h3>{product.name}</h3>
       <p className="material">{product.material} | {product.category}</p>
       <div className="price-row">
-        <span className="price">₹{product.price}</span>
-        <span className="original-price">₹{Math.round(product.price * 1.3)}</span>
+        <span className="price">Rs. {product.price}</span>
+        <span className="original-price">Rs. {Math.round(product.price * 1.3)}</span>
         <span className="discount">-30%</span>
       </div>
       <div className="product-buttons">
