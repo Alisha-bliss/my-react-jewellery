@@ -7,6 +7,8 @@ import LoginModal from './components/LoginModal'
 import AdminPanel from './components/AdminPanel'
 import UserDashboard from './components/UserDashboard'
 import ProductDetail from './components/ProductDetail'
+import ResetPassword from './components/ResetPassword'
+import EmailVerification from './components/EmailVerification'
 
 function App() {
   const [products, setProducts] = useState([])
@@ -25,6 +27,8 @@ function App() {
   const [selectedBlog, setSelectedBlog] = useState(null)
   const [blogPosts, setBlogPosts] = useState([])
   const [isPublicView, setIsPublicView] = useState(false)
+  const [showResetPassword, setShowResetPassword] = useState(false)
+  const [showEmailVerification, setShowEmailVerification] = useState(false)
   
   // Single selection per category
   const [selectedType, setSelectedType] = useState(null)
@@ -41,6 +45,16 @@ function App() {
         }
       })
       .catch(error => console.error('Error fetching blog posts:', error))
+  }, [])
+
+  // ========== CHECK URL FOR RESET PASSWORD / VERIFY EMAIL ==========
+  useEffect(() => {
+    const path = window.location.pathname
+    if (path === '/reset-password') {
+      setActivePage('reset-password')
+    } else if (path === '/verify-email') {
+      setActivePage('verify-email')
+    }
   }, [])
   
   const categoryMapping = {
@@ -393,24 +407,24 @@ function App() {
   )
 
   // Check if we should show the top bar (not in admin panel AND not in dashboard AND not in product detail)
-  const showTopBar = !(activePage === 'admin' && !isPublicView) && activePage !== 'dashboard' && activePage !== 'productdetail'
+  const showTopBar = !(activePage === 'admin' && !isPublicView) && activePage !== 'dashboard' && activePage !== 'productdetail' && activePage !== 'reset-password' && activePage !== 'verify-email'
 
   // Only show Header when NOT in admin panel AND NOT in dashboard AND NOT in product detail
-  const showHeader = !(activePage === 'admin' && !isPublicView) && activePage !== 'dashboard' && activePage !== 'productdetail'
+  const showHeader = !(activePage === 'admin' && !isPublicView) && activePage !== 'dashboard' && activePage !== 'productdetail' && activePage !== 'reset-password' && activePage !== 'verify-email'
 
   // Check if we're in admin panel mode
   const isAdminMode = activePage === 'admin' && !isPublicView
 
   return (
     <div className="app">
-      {/* Top Bar - Only show when NOT in admin panel, NOT in dashboard, NOT in product detail */}
+      {/* Top Bar - Only show when NOT in admin panel, NOT in dashboard, NOT in product detail, NOT in reset-password, NOT in verify-email */}
       {showTopBar && (
         <div className="top-bar">
           <p>✨ Free Shipping on orders above Rs. 10,000 all over inside the valley. ✨</p>
         </div>
       )}
 
-      {/* Only show Header when NOT in admin panel, NOT in dashboard, NOT in product detail */}
+      {/* Only show Header when NOT in admin panel, NOT in dashboard, NOT in product detail, NOT in reset-password, NOT in verify-email */}
       {showHeader && (
         <Header 
           user={user}
@@ -454,6 +468,28 @@ function App() {
           product={selectedProductDetail}
           addToCart={addToCart}
           onClose={closeProductDetail}
+          onNavigate={navigateTo}
+        />
+      )}
+
+      {/* RESET PASSWORD PAGE */}
+      {activePage === 'reset-password' && (
+        <ResetPassword 
+          onClose={() => {
+            setActivePage('home')
+            window.history.pushState({}, '', '/')
+          }}
+          onNavigate={navigateTo}
+        />
+      )}
+
+      {/* EMAIL VERIFICATION PAGE */}
+      {activePage === 'verify-email' && (
+        <EmailVerification 
+          onClose={() => {
+            setActivePage('home')
+            window.history.pushState({}, '', '/')
+          }}
           onNavigate={navigateTo}
         />
       )}
