@@ -9,6 +9,7 @@ import UserDashboard from './components/UserDashboard'
 import ProductDetail from './components/ProductDetail'
 import ResetPassword from './components/ResetPassword'
 import EmailVerification from './components/EmailVerification'
+import Checkout from './components/Checkout'
 
 function App() {
   const [products, setProducts] = useState([])
@@ -29,6 +30,7 @@ function App() {
   const [isPublicView, setIsPublicView] = useState(false)
   const [showResetPassword, setShowResetPassword] = useState(false)
   const [showEmailVerification, setShowEmailVerification] = useState(false)
+  const [showCheckout, setShowCheckout] = useState(false)
   
   // Single selection per category
   const [selectedType, setSelectedType] = useState(null)
@@ -113,7 +115,7 @@ function App() {
   // Hero section slides
   const heroSlides = [
     {
-      image: 'https://www.tibetansilver.com/wp-content/uploads/2025/03/goldish-1910574079-1.jpg',
+      image: 'https://cdn.shopify.com/s/files/1/0734/9082/5529/files/blog2_banner2.jpg?v=1754234459',
       title: 'Silver Collection',
       subtitle: 'Handcrafted with techniques'
     },
@@ -407,10 +409,10 @@ function App() {
   )
 
   // Check if we should show the top bar (not in admin panel AND not in dashboard AND not in product detail)
-  const showTopBar = !(activePage === 'admin' && !isPublicView) && activePage !== 'dashboard' && activePage !== 'productdetail' && activePage !== 'reset-password' && activePage !== 'verify-email'
+  const showTopBar = !(activePage === 'admin' && !isPublicView) && activePage !== 'dashboard' && activePage !== 'productdetail' && activePage !== 'reset-password' && activePage !== 'verify-email' && activePage !== 'checkout'
 
   // Only show Header when NOT in admin panel AND NOT in dashboard AND NOT in product detail
-  const showHeader = !(activePage === 'admin' && !isPublicView) && activePage !== 'dashboard' && activePage !== 'productdetail' && activePage !== 'reset-password' && activePage !== 'verify-email'
+  const showHeader = !(activePage === 'admin' && !isPublicView) && activePage !== 'dashboard' && activePage !== 'productdetail' && activePage !== 'reset-password' && activePage !== 'verify-email' && activePage !== 'checkout'
 
   // Check if we're in admin panel mode
   const isAdminMode = activePage === 'admin' && !isPublicView
@@ -444,6 +446,8 @@ function App() {
           onGoToPublicView={goToPublicView}
           onGoBackToAdmin={goBackToAdmin}
           onLogout={handleLogout}
+          addFilter={addFilter}
+          categoryItems={categoryItems}
         />
       )}
 
@@ -591,7 +595,7 @@ function App() {
                 <div className="cart-summary-row"><span>Subtotal:</span><span>Rs. {getTotal()}</span></div>
                 <div className="cart-summary-row"><span>Shipping:</span><span>Free</span></div>
                 <div className="cart-summary-row.total"><span>Total:</span><span>Rs. {getTotal()}</span></div>
-                <button className="checkout-btn" onClick={placeOrder}>Proceed to Checkout →</button>
+                <button className="checkout-btn" onClick={() => navigateTo('checkout')}>Proceed to Checkout →</button>
               </div>
             </>
           )}
@@ -907,6 +911,19 @@ function App() {
           getTotal={getTotal}
           onNavigate={navigateTo}
           placeOrder={placeOrder}
+        />
+      )}
+
+      {/* CHECKOUT PAGE */}
+      {activePage === 'checkout' && (
+        <Checkout 
+          cart={cart}
+          getTotal={getTotal}
+          user={user}
+          onClose={() => {
+            setActivePage('cart')
+          }}
+          clearCart={() => setCart([])}
         />
       )}
 

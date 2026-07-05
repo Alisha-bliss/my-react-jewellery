@@ -11,6 +11,7 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
     totalUsers: 0,
     totalProducts: 0,
     totalOrders: 0,
+    monthlyOrders: 0,
     pendingOrders: 0,
     processingOrders: 0,
     shippedOrders: 0,
@@ -37,7 +38,7 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
     return Array.isArray(data) ? data : []
   }
 
-  // Format date to Nepal time (UTC+5:45) - FIXED
+  // Format date to Nepal time (UTC+5:45)
   const formatNepalTime = (dateString) => {
     if (!dateString) return 'N/A'
     const date = new Date(dateString)
@@ -52,7 +53,7 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
     })
   }
 
-  // Format date for month grouping (Nepal time) - FIXED
+  // Format date for month grouping (Nepal time)
   const getMonthYear = (dateString) => {
     if (!dateString) return ''
     const date = new Date(dateString)
@@ -112,39 +113,47 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
         .filter(o => o && o.status === 'delivered')
         .reduce((sum, o) => sum + parseFloat(o?.total_amount || 0), 0)
       
-      // Get current month revenue ONLY from DELIVERED orders (Nepal time) - FIXED
+      // Get current month in Nepal time
       const now = new Date()
-      const currentMonth = parseInt(now.toLocaleString('default', { month: 'numeric', timeZone: 'Asia/Kathmandu' })) - 1
-      const currentYear = parseInt(now.toLocaleString('default', { year: 'numeric', timeZone: 'Asia/Kathmandu' }))
+      const nowNepal = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kathmandu' }))
+      const currentMonth = nowNepal.getMonth()
+      const currentYear = nowNepal.getFullYear()
       
       const monthlyRevenue = safeOrders
         .filter(o => {
           if (!o || !o.created_at) return false
           if (o.status !== 'delivered') return false
           const orderDate = new Date(o.created_at)
-          const orderMonth = parseInt(orderDate.toLocaleString('default', { month: 'numeric', timeZone: 'Asia/Kathmandu' })) - 1
-          const orderYear = parseInt(orderDate.toLocaleString('default', { year: 'numeric', timeZone: 'Asia/Kathmandu' }))
-          return orderMonth === currentMonth && orderYear === currentYear
+          const orderNepal = new Date(orderDate.toLocaleString('en-US', { timeZone: 'Asia/Kathmandu' }))
+          return orderNepal.getMonth() === currentMonth && orderNepal.getFullYear() === currentYear
         })
         .reduce((sum, o) => sum + parseFloat(o?.total_amount || 0), 0)
       
-      // Get weekly orders (last 7 days) - ALL orders (Nepal time) - FIXED
-      const nowNepal = new Date()
-      nowNepal.setHours(0, 0, 0, 0)
+      // Calculate monthly orders (ALL orders in current month)
+      const monthlyOrders = safeOrders
+        .filter(o => {
+          if (!o || !o.created_at) return false
+          const orderDate = new Date(o.created_at)
+          const orderNepal = new Date(orderDate.toLocaleString('en-US', { timeZone: 'Asia/Kathmandu' }))
+          return orderNepal.getMonth() === currentMonth && orderNepal.getFullYear() === currentYear
+        }).length
+      
+      // Get weekly orders in Nepal time
       const weekAgo = new Date(nowNepal)
       weekAgo.setDate(weekAgo.getDate() - 7)
       
       const weeklyOrders = safeOrders.filter(o => {
         if (!o || !o.created_at) return false
         const orderDate = new Date(o.created_at)
-        const orderDateNepal = new Date(orderDate.toLocaleString('en-US', { timeZone: 'Asia/Kathmandu' }))
-        return orderDateNepal >= weekAgo
+        const orderNepal = new Date(orderDate.toLocaleString('en-US', { timeZone: 'Asia/Kathmandu' }))
+        return orderNepal >= weekAgo
       }).length
       
       setStats({
         totalUsers: safeUsers.length,
         totalProducts: safeProducts.length,
         totalOrders: safeOrders.length,
+        monthlyOrders: monthlyOrders,
         pendingOrders,
         processingOrders,
         shippedOrders,
@@ -160,6 +169,7 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
         totalUsers: 0,
         totalProducts: 0,
         totalOrders: 0,
+        monthlyOrders: 0,
         pendingOrders: 0,
         processingOrders: 0,
         shippedOrders: 0,
@@ -229,7 +239,7 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
             monthlyMap[monthYearShort] += parseFloat(order.total_amount || 0)
           }
           
-          // For monthly orders detail - all orders with details
+          // For monthly orders detail - ALL orders with details
           if (!monthlyOrdersMap[monthYear]) {
             monthlyOrdersMap[monthYear] = []
           }
@@ -433,49 +443,90 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
         data = orders.filter(o => o.status === 'pending').map(o => ({ id: o.id, user_id: o.user_id, total: o.total_amount, date: formatNepalTime(o.created_at) }))
         break
       case 'monthlyorders':
-        title = `Orders for ${statsModalData.month || ''}`
-        const monthKey = statsModalData.month || ''
-        data = monthlyOrdersData[monthKey] ? monthlyOrdersData[monthKey].map(o => ({ 
-          id: o.id, 
-          user_id: o.user_id, 
-          amount: o.amount, 
-          status: o.status, 
-          date: formatNepalTime(o.date) 
-        })) : []
+        const now = new Date()
+        const currentMonthName = now.toLocaleString('default', { month: 'long', timeZone: 'Asia/Kathmandu' })
+        const currentYearNum = now.toLocaleString('default', { year: 'numeric', timeZone: 'Asia/Kathmandu' })
+        const currentMonthNum = parseInt(now.toLocaleString('default', { month: 'numeric', timeZone: 'Asia/Kathmandu' })) - 1
+        
+        title = `Monthly Orders (${currentMonthName} ${currentYearNum})`
+        data = orders
+          .filter(o => {
+            if (!o || !o.created_at) return false
+            const orderDate = new Date(o.created_at)
+            const orderNepal = new Date(orderDate.toLocaleString('en-US', { timeZone: 'Asia/Kathmandu' }))
+            return orderNepal.getMonth() === currentMonthNum && orderNepal.getFullYear() === parseInt(currentYearNum)
+          })
+          .map(o => ({ 
+            id: o.id, 
+            user_id: o.user_id, 
+            total: o.total_amount, 
+            status: o.status, 
+            date: formatNepalTime(o.created_at) 
+          }))
         break
       default:
         return
     }
     
-    setStatsModalData({ title, data, type, month: statsModalData.month || '' })
+    setStatsModalData({ title, data, type })
     setShowStatsModal(true)
   }
 
   // Handle monthly order click - show details for that month
   const handleMonthlyOrderClick = (month) => {
-    // Find the full month name from the short month name
-    const monthMap = {
-      'Jan': 'January', 'Feb': 'February', 'Mar': 'March', 'Apr': 'April',
-      'May': 'May', 'Jun': 'June', 'Jul': 'July', 'Aug': 'August',
-      'Sep': 'September', 'Oct': 'October', 'Nov': 'November', 'Dec': 'December'
+    // Try to find the month in monthlyOrdersData
+    let ordersForMonth = []
+    let foundKey = ''
+    
+    // First try: exact match with the month as-is
+    if (monthlyOrdersData[month]) {
+      ordersForMonth = monthlyOrdersData[month]
+      foundKey = month
+    } else {
+      // Second try: map short month to full month
+      const parts = month.split(' ')
+      const shortMonth = parts[0]
+      const year = parts[1] || ''
+      
+      const monthMap = {
+        'Jan': 'January', 'Feb': 'February', 'Mar': 'March', 
+        'Apr': 'April', 'May': 'May', 'Jun': 'June',
+        'Jul': 'July', 'Aug': 'August', 'Sep': 'September',
+        'Oct': 'October', 'Nov': 'November', 'Dec': 'December'
+      }
+      
+      const fullMonth = monthMap[shortMonth] || shortMonth
+      const fullMonthKey = `${fullMonth} ${year}`
+      
+      if (monthlyOrdersData[fullMonthKey]) {
+        ordersForMonth = monthlyOrdersData[fullMonthKey]
+        foundKey = fullMonthKey
+      } else {
+        // Third try: find by partial match (just the month name)
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                            'July', 'August', 'September', 'October', 'November', 'December']
+        const monthName = monthNames[Object.keys(monthMap).indexOf(shortMonth)]
+        
+        for (const key of Object.keys(monthlyOrdersData)) {
+          if (key.startsWith(monthName) && key.endsWith(year)) {
+            ordersForMonth = monthlyOrdersData[key]
+            foundKey = key
+            break
+          }
+        }
+      }
     }
     
-    const monthParts = month.split(' ')
-    const shortMonth = monthParts[0]
-    const year = monthParts[1]
-    const fullMonth = monthMap[shortMonth] || shortMonth
-    const fullMonthKey = `${fullMonth} ${year}`
-    
     const title = `Orders for ${month}`
-    const data = monthlyOrdersData[fullMonthKey] ? monthlyOrdersData[fullMonthKey].map(o => ({ 
+    const data = ordersForMonth.map(o => ({ 
       id: o.id, 
       user_id: o.user_id, 
       amount: o.amount, 
       status: o.status, 
       date: formatNepalTime(o.date) 
-    })) : []
+    }))
     
-    setStatsModalData({ title, data, type: 'monthlyorders', month })
+    setStatsModalData({ title, data, type: 'monthlyorders' })
     setShowStatsModal(true)
   }
 
@@ -569,7 +620,7 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
               </div>
               <div className="quick-stat-card clickable" onClick={() => handleStatClick('monthlyorders')}>
                 <h4>📊 Monthly Orders</h4>
-                <p className="quick-stat-value">{stats.totalOrders || 0}</p>
+                <p className="quick-stat-value">{stats.monthlyOrders || 0}</p>
               </div>
               <div className="quick-stat-card clickable" onClick={() => handleStatClick('pending')}>
                 <h4>⏳ Pending Orders</h4>

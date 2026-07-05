@@ -1,11 +1,12 @@
 import { useState } from 'react'
 
-function Header({ user, cartCount, wishlistCount, onLoginClick, onNavigate, activePage, searchTerm, onSearchChange, onSearchSubmit, onSearchKeyPress, suggestions, onSuggestionClick, showSuggestions, isPublicView, onGoToPublicView, onGoBackToAdmin, onLogout }) {
+function Header({ user, cartCount, wishlistCount, onLoginClick, onNavigate, activePage, searchTerm, onSearchChange, onSearchSubmit, onSearchKeyPress, suggestions, onSuggestionClick, showSuggestions, isPublicView, onGoToPublicView, onGoBackToAdmin, onLogout, addFilter, categoryItems }) {
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false)
 
-  const categoryItems = {
+  // Use categoryItems from props or fallback to default
+  const items = categoryItems || {
     'Jewellery Types': ['Rings', 'Necklaces', 'Earrings', 'Bracelets', 'Pendants', 'Anklets'],
-    'Price Range': ['Under ₹2000', '₹2000 - ₹5000', '₹5000 - ₹10000', '₹10000 - ₹15000', 'Above ₹15000'],
+    'Price Range': ['Under Rs. 2000', 'Rs. 2000 - Rs. 5000', 'Rs. 5000 - Rs. 10000', 'Rs. 10000 - Rs. 15000', 'Above Rs. 15000'],
     'Collections': ['Silver', 'Copper', 'Crystal', 'Gemstone']
   }
 
@@ -51,7 +52,6 @@ function Header({ user, cartCount, wishlistCount, onLoginClick, onNavigate, acti
           </div>
           
           <div className="header-actions">
-            {/* Profile Button - Directly goes to Dashboard when logged in */}
             <button className="action-icon" onClick={() => user ? onNavigate('dashboard') : onLoginClick()}>
               <svg className="icon-svg" width="22" height="22" viewBox="0 0 24 24" fill="none">
                 <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.8" fill="none"/>
@@ -92,14 +92,33 @@ function Header({ user, cartCount, wishlistCount, onLoginClick, onNavigate, acti
           </button>
           {showCategoryDropdown && (
             <div className="dropdown-menu" onMouseEnter={() => setShowCategoryDropdown(true)}>
-              {Object.entries(categoryItems).map(([section, items]) => (
-                <div key={section} className="dropdown-section">
-                  <h4>{section}</h4>
-                  {items.map(item => (
-                    <button key={item} className="dropdown-item" onClick={() => onNavigate('all')}>{item}</button>
-                  ))}
-                </div>
-              ))}
+              {Object.entries(items).map(([section, sectionItems]) => {
+                // Determine filter type based on section
+                let filterType = 'type'
+                if (section === 'Price Range') filterType = 'price'
+                else if (section === 'Collections') filterType = 'collection'
+                
+                return (
+                  <div key={section} className="dropdown-section">
+                    <h4>{section}</h4>
+                    {sectionItems.map(item => (
+                      <button 
+                        key={item} 
+                        className="dropdown-item"
+                        onClick={() => {
+                          if (addFilter) {
+                            addFilter(filterType, item)
+                          } else {
+                            onNavigate('all')
+                          }
+                        }}
+                      >
+                        {item}
+                      </button>
+                    ))}
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
