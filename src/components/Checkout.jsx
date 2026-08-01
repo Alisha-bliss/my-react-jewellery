@@ -7,9 +7,6 @@ function Checkout({ cart, getTotal, user, onClose, clearCart }) {
   const ESEWA_MERCHANT_ID = 'EPAYTEST'
   const ESEWA_URL = 'https://uat.esewa.com.np/epay/main'
   
-  // Khalti TEST Configuration - Using official public test key
- const KHALTI_PUBLIC_KEY = 'test_public_key_55f8c3c4d4e8b2a1f5c3d4e8b2a1f5c3'
-
   const [paymentMethod, setPaymentMethod] = useState('cod')
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
@@ -129,54 +126,40 @@ function Checkout({ cart, getTotal, user, onClose, clearCart }) {
     }, 1000)
   }
 
-  const initiateKhaltiPayment = (orderId, amount) => {
-    const khaltiConfig = {
-      publicKey: KHALTI_PUBLIC_KEY,
-      productIdentity: orderId,
-      productName: 'Siddhi Jewells Order',
-      productUrl: window.location.origin,
-      eventHandler: {
-        onSuccess(payload) {
-          console.log('Payment Success:', payload)
-          setOrderMessage('Payment successful! Your order has been confirmed.')
-          setOrderPlaced(true)
-          clearCart()
-          setLoading(false)
-        },
-        onError(error) {
-          console.error('Payment Error:', error)
-          alert('Payment failed. Please try again.')
-          setLoading(false)
-        },
-        onClose() {
-          console.log('Widget closed')
-          setLoading(false)
-        }
-      },
-      paymentPreference: ['KHALTI', 'EBANKING', 'MOBILE_BANKING', 'CONNECT_IPS', 'SCT'],
-      amount: amount * 100
-    }
-
+  const initiateKhaltiPayment = async (orderId, amount) => {
+    // Khalti's old in-page widget (khalti-checkout.iffe.js / KPG-1) is
+    // discontinued. The current flow (KPG-2) requires the backend to call
+    // Khalti's initiate API with a secret key, then we redirect the user
+    // to the payment_url Khalti gives back. See backend/server.js.
+    setLoading(true)
     try {
-      if (typeof window.KhaltiCheckout === 'undefined') {
-        const script = document.createElement('script')
-        script.src = 'https://khalti.s3.ap-south-1.amazonaws.com/KPG/dist/2020.12.17.0.0.0/khalti-checkout.iffe.js'
-        script.onload = () => {
-          const checkout = new window.KhaltiCheckout(khaltiConfig)
-          checkout.show({ amount: amount * 100 })
-        }
-        script.onerror = () => {
-          alert('Failed to load Khalti payment. Please try again.')
-          setLoading(false)
-        }
-        document.body.appendChild(script)
+      const response = await fetch('http://localhost:5001/api/payment/khalti/initiate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          amount,
+          fullName: formData.fullName,
+          email: formData.email,
+          phone: formData.phone
+        })
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.payment_url) {
+        // Full redirect to Khalti's hosted payment page.
+        // The user is sent back to FRONTEND_URL afterwards with ?pidx=...
+        // which App.jsx picks up to verify the payment.
+        window.location.href = data.payment_url
       } else {
-        const checkout = new window.KhaltiCheckout(khaltiConfig)
-        checkout.show({ amount: amount * 100 })
+        console.error('Khalti initiate failed:', data)
+        alert('Failed to start Khalti payment: ' + (data.error || 'Unknown error'))
+        setLoading(false)
       }
     } catch (error) {
-      console.error('Khalti error:', error)
-      alert('Failed to initialize Khalti payment. Please try again.')
+      console.error('Khalti initiate error:', error)
+      alert('Failed to start Khalti payment. Please try again.')
       setLoading(false)
     }
   }

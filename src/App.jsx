@@ -37,6 +37,36 @@ function App() {
   const [selectedPriceRange, setSelectedPriceRange] = useState(null)
   const [selectedMaterial, setSelectedMaterial] = useState(null)
   
+  // Handle redirect back from Khalti after payment (KPG-2 appends
+  // ?pidx=...&purchase_order_id=...&status=... to our return_url)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const pidx = params.get('pidx')
+    const orderId = params.get('purchase_order_id')
+
+    if (pidx) {
+      fetch('http://localhost:5001/api/payment/khalti/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pidx, orderId })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === 'Completed') {
+            alert('Payment successful! Your order has been confirmed.')
+            setCart([])
+          } else {
+            alert('Payment was not completed. Status: ' + data.status)
+          }
+        })
+        .catch(err => console.error('Khalti verify error:', err))
+        .finally(() => {
+          // Strip the query params so a page refresh doesn't re-verify
+          window.history.replaceState({}, '', window.location.pathname)
+        })
+    }
+  }, [])
+
   // Fetch blog posts from backend
   useEffect(() => {
     fetch('http://localhost:5001/api/news')

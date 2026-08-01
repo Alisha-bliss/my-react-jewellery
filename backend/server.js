@@ -5,11 +5,24 @@ import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import bcrypt from 'bcrypt';
 import cors from 'cors';
+import axios from 'axios';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 console.log('🟢 Starting Node.js jewellery server with Express...');
 
 const app = express();
 const PORT = 5001;
+
+// ========== KHALTI CONFIG (KPG-2 ePayment API) ==========
+// Get your test secret key from the Khalti merchant test dashboard:
+// https://test-admin.khalti.com  ->  Settings -> Keys
+// The old khalti-checkout.iffe.js widget (KPG-1) used in older tutorials
+// is discontinued — Khalti now requires this server-side flow instead.
+const KHALTI_SECRET_KEY = process.env.KHALTI_SECRET_KEY; // e.g. "test_secret_key_xxxxxxxx"
+const KHALTI_BASE_URL = process.env.KHALTI_BASE_URL || 'https://dev.khalti.com/api/v2/epayment';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 // ========== MIDDLEWARE ==========
 app.use(cors({
@@ -364,6 +377,85 @@ app.post('/api/orders', (req, res) => {
             }
         );
     });
+});
+
+// ========== KHALTI PAYMENT ROUTES (KPG-2) ==========
+
+// POST initiate a Khalti payment — call this after the order is created
+app.post('/api/payment/khalti/initiate', async (req, res) => {
+    const { orderId, amount, fullName, email, phone } = req.body;
+
+    if (!orderId || !amount) {
+        return res.status(400).json({ error: 'orderId and amount are required' });
+    }
+    if (!KHALTI_SECRET_KEY) {
+        console.error('❌ KHALTI_SECRET_KEY is not set in backend/.env');
+        return res.status(500).json({ error: 'Khalti is not configured on the server' });
+    }
+
+    try {
+        const response = await axios.post(`${KHALTI_BASE_URL}/initiate/`, {
+            return_url: `${FRONTEND_URL}/`,
+            website_url: FRONTEND_URL,
+            amount: Math.round(amount * 100), // Khalti expects paisa
+            purchase_order_id: String(orderId),
+            purchase_order_name: `Siddhi Jewells Order #${orderId}`,
+            customer_info: {
+                name: fullName || 'Customer',
+                email: email || 'customer@example.com',
+                phone: phone || '9800000000'
+            }
+        }, {
+            headers: {
+                Authorization: `Key ${KHALTI_SECRET_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        // Remember the pidx against this order so we can verify it later
+        db.query('UPDATE orders SET pidx = ? WHERE id = ?', [response.data.pidx, orderId], (err) => {
+            if (err) console.error('⚠️ Could not store pidx (did you add the pidx column?):', err.message);
+        });
+
+        res.json({ payment_url: response.data.payment_url, pidx: response.data.pidx });
+    } catch (error) {
+        console.error('❌ Khalti initiate error:', error.response?.data || error.message);
+        res.status(500).json({ error: 'Failed to initiate Khalti payment', detail: error.response?.data });
+    }
+});
+
+// POST verify a Khalti payment — call this once the user is redirected back
+app.post('/api/payment/khalti/verify', async (req, res) => {
+    const { pidx, orderId } = req.body;
+
+    if (!pidx) {
+        return res.status(400).json({ error: 'pidx is required' });
+    }
+    if (!KHALTI_SECRET_KEY) {
+        return res.status(500).json({ error: 'Khalti is not configured on the server' });
+    }
+
+    try {
+        const response = await axios.post(`${KHALTI_BASE_URL}/lookup/`, { pidx }, {
+            headers: {
+                Authorization: `Key ${KHALTI_SECRET_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const status = response.data.status; // Completed | Pending | Expired | User canceled | Refunded
+
+        if (status === 'Completed' && orderId) {
+            db.query('UPDATE orders SET payment_status = ?, status = ? WHERE id = ?', ['paid', 'processing', orderId], (err) => {
+                if (err) console.error('⚠️ Could not update order payment status (did you add the payment_status column?):', err.message);
+            });
+        }
+
+        res.json({ status, detail: response.data });
+    } catch (error) {
+        console.error('❌ Khalti verify error:', error.response?.data || error.message);
+        res.status(500).json({ error: 'Failed to verify Khalti payment', detail: error.response?.data });
+    }
 });
 
 // ========== AUTH ROUTES ==========
