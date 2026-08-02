@@ -1,5 +1,6 @@
 import './ResetPassword.css'
 import { useState, useEffect } from 'react'
+import { EyeIcon, EyeOffIcon } from './icons/EyeIcons'
 
 function ResetPassword({ onNavigate }) {
   const [formData, setFormData] = useState({
@@ -121,8 +122,9 @@ function ResetPassword({ onNavigate }) {
                       type="button" 
                       className="toggle-password-btn"
                       onClick={() => setShowPassword(!showPassword)}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
                     >
-                      {showPassword ? "🙈" : "👁️"}
+                      {showPassword ? <EyeOffIcon /> : <EyeIcon />}
                     </button>
                   </div>
                 </div>
@@ -137,6 +139,14 @@ function ResetPassword({ onNavigate }) {
                       value={formData.confirmPassword}
                       onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
                     />
+                    <button 
+                      type="button" 
+                      className="toggle-password-btn"
+                      onClick={() => setShowPassword(!showPassword)}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                    </button>
                   </div>
                 </div>
                 

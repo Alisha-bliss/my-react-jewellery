@@ -10,6 +10,7 @@ import ProductDetail from './components/ProductDetail'
 import ResetPassword from './components/ResetPassword'
 import EmailVerification from './components/EmailVerification'
 import Checkout from './components/Checkout'
+import Receipt from './components/Receipt'
 
 function App() {
   const [products, setProducts] = useState([])
@@ -31,6 +32,7 @@ function App() {
   const [showResetPassword, setShowResetPassword] = useState(false)
   const [showEmailVerification, setShowEmailVerification] = useState(false)
   const [showCheckout, setShowCheckout] = useState(false)
+  const [receiptOrder, setReceiptOrder] = useState(null)
   
   // Single selection per category
   const [selectedType, setSelectedType] = useState(null)
@@ -52,9 +54,10 @@ function App() {
       })
         .then(res => res.json())
         .then(data => {
-          if (data.status === 'Completed') {
-            alert('Payment successful! Your order has been confirmed.')
+          if (data.status === 'Completed' && data.order) {
+            setReceiptOrder({ ...data.order, transaction_id: data.transaction_id })
             setCart([])
+            setActivePage('receipt')
           } else {
             alert('Payment was not completed. Status: ' + data.status)
           }
@@ -184,6 +187,14 @@ function App() {
     scrollToTop()
   }
 
+  // Used by Footer Quick Links - always takes user to the public site page,
+  // even if they were inside the Admin Panel
+  const goToPublicPage = (page) => {
+    setIsPublicView(true)
+    setActivePage(page)
+    scrollToTop()
+  }
+
   // Go back to admin dashboard
   const goBackToAdmin = () => {
     setIsPublicView(false)
@@ -208,7 +219,7 @@ function App() {
   const performSearch = () => {
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase()
-      const results = getFilteredProducts().filter(p => 
+      const results = getNonZodiacProducts().filter(p => 
         p.name.toLowerCase().includes(term) ||
         (p.material && p.material.toLowerCase().includes(term)) ||
         (p.category && p.category.toLowerCase().includes(term))
@@ -247,11 +258,37 @@ function App() {
   useEffect(() => {
     const savedWishlist = localStorage.getItem('wishlist')
     if (savedWishlist) setWishlist(JSON.parse(savedWishlist))
+
+    const savedUser = localStorage.getItem('user')
+    if (savedUser) {
+      const parsedUser = JSON.parse(savedUser)
+      if (parsedUser.role === 'admin') {
+        // Never auto-restore an admin session - always require a fresh login
+        localStorage.removeItem('user')
+      } else {
+        setUser(parsedUser)
+      }
+    }
+
+    const savedCart = localStorage.getItem('cart')
+    if (savedCart) setCart(JSON.parse(savedCart))
   }, [])
 
   useEffect(() => {
     localStorage.setItem('wishlist', JSON.stringify(wishlist))
   }, [wishlist])
+
+  useEffect(() => {
+    if (user && user.role !== 'admin') {
+      localStorage.setItem('user', JSON.stringify(user))
+    } else {
+      localStorage.removeItem('user')
+    }
+  }, [user])
+
+  useEffect(() => {
+    localStorage.setItem('cart', JSON.stringify(cart))
+  }, [cart])
 
   const getNonZodiacProducts = () => products.filter(p => !zodiacProductNames.includes(p.name))
 
@@ -304,20 +341,24 @@ function App() {
     setTimeout(() => performSearch(), 10)
   }
 
+  const handleSearchChange = (value) => {
+    setSearchTerm(value)
+    setShowSuggestions(value.trim().length > 0)
+  }
+
   const filteredProducts = getFilteredProducts()
 
   const addToCart = (product) => {
-    const existing = cart.find(item => item.id === product.id)
-    if (existing) {
-      setCart(cart.map(item => 
-        item.id === product.id ? {...item, quantity: item.quantity + 1} : item
-      ))
-    } else {
-      setCart([...cart, {...product, quantity: 1}])
-    }
-    if (wishlist.find(item => item.id === product.id)) {
-      setWishlist(wishlist.filter(item => item.id !== product.id))
-    }
+    setCart(prevCart => {
+      const existing = prevCart.find(item => item.id === product.id)
+      if (existing) {
+        return prevCart.map(item =>
+          item.id === product.id ? {...item, quantity: item.quantity + 1} : item
+        )
+      }
+      return [...prevCart, {...product, quantity: 1}]
+    })
+    setWishlist(prevWishlist => prevWishlist.filter(item => item.id !== product.id))
   }
 
   const removeFromCart = (productId) => {
@@ -333,6 +374,12 @@ function App() {
   }
 
   const getTotal = () => cart.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+
+  // Free shipping on orders Rs. 10,000+, otherwise a flat Rs. 100 delivery charge
+  const SHIPPING_THRESHOLD = 10000
+  const SHIPPING_FEE = 100
+  const getShippingFee = () => (getTotal() >= SHIPPING_THRESHOLD ? 0 : SHIPPING_FEE)
+  const getGrandTotal = () => getTotal() + getShippingFee()
 
   const toggleWishlist = (product) => {
     if (wishlist.find(item => item.id === product.id)) {
@@ -351,6 +398,31 @@ function App() {
     setCart([])
     setWishlist([])
     alert('Logged out successfully!')
+  }
+
+  // Permanently delete the logged-in user's account (requires password confirmation)
+  const handleDeleteAccount = async (password) => {
+    try {
+      const response = await fetch(`http://localhost:5001/api/users/${user.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        return { success: false, error: data.error || 'Could not delete account' }
+      }
+      // Wipe local state and log out, without the extra "logged out" alert
+      setUser(null)
+      setIsPublicView(false)
+      setActivePage('home')
+      setCart([])
+      setWishlist([])
+      return { success: true }
+    } catch (error) {
+      console.error('Delete account error:', error)
+      return { success: false, error: 'Could not delete account. Please try again.' }
+    }
   }
 
   // Place order function
@@ -379,7 +451,8 @@ function App() {
             quantity: item.quantity,
             price: item.price
           })),
-          total: getTotal()
+          total: getGrandTotal(),
+          shipping_fee: getShippingFee()
         })
       })
 
@@ -439,10 +512,10 @@ function App() {
   )
 
   // Check if we should show the top bar (not in admin panel AND not in dashboard AND not in product detail)
-  const showTopBar = !(activePage === 'admin' && !isPublicView) && activePage !== 'dashboard' && activePage !== 'productdetail' && activePage !== 'reset-password' && activePage !== 'verify-email' && activePage !== 'checkout'
+  const showTopBar = !(activePage === 'admin' && !isPublicView) && activePage !== 'dashboard' && activePage !== 'productdetail' && activePage !== 'reset-password' && activePage !== 'verify-email' && activePage !== 'checkout' && activePage !== 'receipt'
 
   // Only show Header when NOT in admin panel AND NOT in dashboard AND NOT in product detail
-  const showHeader = !(activePage === 'admin' && !isPublicView) && activePage !== 'dashboard' && activePage !== 'productdetail' && activePage !== 'reset-password' && activePage !== 'verify-email' && activePage !== 'checkout'
+  const showHeader = !(activePage === 'admin' && !isPublicView) && activePage !== 'dashboard' && activePage !== 'productdetail' && activePage !== 'reset-password' && activePage !== 'verify-email' && activePage !== 'checkout' && activePage !== 'receipt'
 
   // Check if we're in admin panel mode
   const isAdminMode = activePage === 'admin' && !isPublicView
@@ -466,7 +539,7 @@ function App() {
           onNavigate={navigateTo}
           activePage={activePage}
           searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
+          onSearchChange={handleSearchChange}
           onSearchSubmit={performSearch}
           onSearchKeyPress={handleSearchKeyPress}
           suggestions={suggestions}
@@ -623,8 +696,11 @@ function App() {
               </div>
               <div className="cart-summary">
                 <div className="cart-summary-row"><span>Subtotal:</span><span>Rs. {getTotal()}</span></div>
-                <div className="cart-summary-row"><span>Shipping:</span><span>Free</span></div>
-                <div className="cart-summary-row.total"><span>Total:</span><span>Rs. {getTotal()}</span></div>
+                <div className="cart-summary-row"><span>Shipping:</span><span>{getShippingFee() === 0 ? 'Free' : `Rs. ${getShippingFee()}`}</span></div>
+                {getShippingFee() > 0 && (
+                  <p className="free-shipping-hint">Add Rs. {(SHIPPING_THRESHOLD - getTotal()).toLocaleString()} more to get free shipping!</p>
+                )}
+                <div className="cart-summary-row.total"><span>Total:</span><span>Rs. {getGrandTotal()}</span></div>
                 <button className="checkout-btn" onClick={() => navigateTo('checkout')}>Proceed to Checkout →</button>
               </div>
             </>
@@ -694,6 +770,35 @@ function App() {
                 onImageClick={openProductDetail}
               />
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* SEARCH RESULTS PAGE */}
+      {activePage === 'search' && !isAdminMode && !(activePage === 'productdetail') && (
+        <div className="page-content">
+          <h2 className="page-title">🔍 Search Results for "{searchTerm}"</h2>
+          <p className="page-subtitle">
+            {searchResults.length > 0 ? `${searchResults.length} product${searchResults.length === 1 ? '' : 's'} found` : 'No products matched your search'}
+          </p>
+          <div className="products-grid">
+            {searchResults.length === 0 ? (
+              <div className="no-results">
+                <p>No products found for "{searchTerm}".</p>
+                <button className="clear-filters-btn" onClick={() => navigateTo('all')}>Browse All Jewellery</button>
+              </div>
+            ) : (
+              searchResults.map(product => (
+                <ProductCard 
+                  key={product.id}
+                  product={product}
+                  onAddToCart={addToCart}
+                  onToggleWishlist={toggleWishlist}
+                  isInWishlist={isInWishlist(product.id)}
+                  onImageClick={openProductDetail}
+                />
+              ))
+            )}
           </div>
         </div>
       )}
@@ -819,7 +924,6 @@ function App() {
               ))}
             </div>
             <div className="blog-post-footer">
-              <button className="share-btn">📤 Share this post</button>
               <button className="back-to-blog-btn" onClick={() => setSelectedBlog(null)}>← Back to Blog</button>
             </div>
           </div>
@@ -931,6 +1035,8 @@ function App() {
       {activePage === 'dashboard' && user && user.role !== 'admin' && (
         <UserDashboard 
           user={user}
+          onUpdateUser={(updatedFields) => setUser(prev => ({ ...prev, ...updatedFields }))}
+          onDeleteAccount={handleDeleteAccount}
           wishlist={wishlist}
           addToCart={addToCart}
           toggleWishlist={toggleWishlist}
@@ -939,6 +1045,8 @@ function App() {
           updateQuantity={updateQuantity}
           removeFromCart={removeFromCart}
           getTotal={getTotal}
+          getShippingFee={getShippingFee}
+          getGrandTotal={getGrandTotal}
           onNavigate={navigateTo}
           placeOrder={placeOrder}
         />
@@ -949,6 +1057,8 @@ function App() {
         <Checkout 
           cart={cart}
           getTotal={getTotal}
+          getShippingFee={getShippingFee}
+          getGrandTotal={getGrandTotal}
           user={user}
           onClose={() => {
             setActivePage('cart')
@@ -957,7 +1067,23 @@ function App() {
         />
       )}
 
-      <Footer />
+      {/* RECEIPT / BILL PAGE - shown after a successful Khalti payment */}
+      {activePage === 'receipt' && (
+        <Receipt 
+          order={receiptOrder}
+          transactionId={receiptOrder?.transaction_id}
+          onContinue={() => {
+            setReceiptOrder(null)
+            setActivePage('home')
+          }}
+          onViewOrders={() => {
+            setReceiptOrder(null)
+            setActivePage('dashboard')
+          }}
+        />
+      )}
+
+      <Footer onNavigate={goToPublicPage} />
     </div>
   )
 }

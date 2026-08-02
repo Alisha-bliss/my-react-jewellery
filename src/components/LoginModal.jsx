@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { EyeIcon, EyeOffIcon } from './icons/EyeIcons'
 
 function LoginModal({ onClose, onLoginSuccess }) {
   const [isLogin, setIsLogin] = useState(true)
@@ -137,8 +138,9 @@ function LoginModal({ onClose, onLoginSuccess }) {
                   type="button" 
                   className="toggle-password"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
-                  {showPassword ? "🙈" : "👁️"}
+                  {showPassword ? <EyeOffIcon /> : <EyeIcon />}
                 </button>
               </div>
               <button type="submit" disabled={isLoading}>

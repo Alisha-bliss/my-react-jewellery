@@ -52,7 +52,10 @@ function Header({ user, cartCount, wishlistCount, onLoginClick, onNavigate, acti
           </div>
           
           <div className="header-actions">
-            <button className="action-icon" onClick={() => user ? onNavigate('dashboard') : onLoginClick()}>
+            <button className="action-icon" onClick={() => {
+              if (!user) { onLoginClick(); return; }
+              if (user.role === 'admin') { onGoBackToAdmin(); } else { onNavigate('dashboard'); }
+            }}>
               <svg className="icon-svg" width="22" height="22" viewBox="0 0 24 24" fill="none">
                 <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.8" fill="none"/>
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="1.8" fill="none"/>

@@ -145,6 +145,18 @@
     color: #666;
 }
 
+.revenue-breakdown-dash {
+    font-size: 11px !important;
+    color: #999 !important;
+    margin-top: 4px;
+}
+
+.quick-stat-breakdown-dash {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.75);
+    margin-top: 4px;
+}
+
 /* Charts Styles */
 .charts-container {
     display: grid;
@@ -280,6 +292,72 @@
 .status-badge.published {
     background: #e8f5e9;
     color: #4caf50;
+}
+
+/* Payment Method Badges */
+.payment-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    border: none;
+    font-family: inherit;
+}
+
+.payment-badge-cod {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.payment-badge-khalti {
+    background: #f3e5f5;
+    color: #5C2D91;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.payment-badge-khalti:hover {
+    background: #e1bee7;
+    transform: translateY(-1px);
+}
+
+/* Payment Detail Modal */
+.payment-detail-modal {
+    width: 400px;
+}
+
+.payment-detail-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.payment-detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 4px;
+    border-bottom: 1px solid #eee;
+}
+
+.payment-detail-row span {
+    color: #777;
+    font-size: 14px;
+}
+
+.payment-detail-row strong {
+    color: #333;
+}
+
+.payment-status-paid {
+    color: #2e7d32 !important;
+}
+
+.payment-status-pending {
+    color: #ff9800 !important;
 }
 
 .role-badge.admin {

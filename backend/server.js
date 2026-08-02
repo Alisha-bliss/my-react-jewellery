@@ -200,6 +200,18 @@ db.query(`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS verified BOOLEAN DEFAULT FALSE
 `, (err) => { if (err) console.error('Error adding verified column:', err); else console.log('✅ verified column ready'); });
 
+db.query(`
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS phone VARCHAR(20),
+      ADD COLUMN IF NOT EXISTS address TEXT,
+      ADD COLUMN IF NOT EXISTS city VARCHAR(100),
+      ADD COLUMN IF NOT EXISTS postal_code VARCHAR(20)
+`, (err) => { if (err) console.error('Error adding profile columns:', err); else console.log('✅ user profile columns ready'); });
+
+db.query(`
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_fee DECIMAL(10,2) DEFAULT 0
+`, (err) => { if (err) console.error('Error adding shipping_fee column:', err); else console.log('✅ shipping_fee column ready'); });
+
 // ========== PRODUCTS ROUTES ==========
 
 // GET all products
@@ -307,16 +319,177 @@ app.get('/api/users', (req, res) => {
     });
 });
 
+// UPDATE own profile (name, phone, address, city, postal_code)
+// Email is intentionally NOT editable here — it's the login identifier.
+app.put('/api/users/:id/profile', (req, res) => {
+    const { id } = req.params;
+    const { name, phone, address, city, postal_code } = req.body;
+
+    if (!name || !name.trim()) {
+        res.status(400).json({ error: 'Name is required' });
+        return;
+    }
+
+    db.query(
+        'UPDATE users SET name = ?, phone = ?, address = ?, city = ?, postal_code = ? WHERE id = ?',
+        [name.trim(), phone || null, address || null, city || null, postal_code || null, id],
+        (err) => {
+            if (err) {
+                console.error('Profile update error:', err.message);
+                res.status(500).json({ error: 'Database error' });
+                return;
+            }
+            db.query('SELECT id, name, email, role, verified, phone, address, city, postal_code FROM users WHERE id = ?', [id], (err2, rows) => {
+                if (err2 || rows.length === 0) {
+                    res.status(500).json({ error: 'Could not fetch updated profile' });
+                    return;
+                }
+                res.json({ success: true, user: rows[0] });
+            });
+        }
+    );
+});
+
+// CHANGE password (requires current password)
+app.put('/api/users/:id/password', async (req, res) => {
+    const { id } = req.params;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+        res.status(400).json({ error: 'Current and new password are required' });
+        return;
+    }
+    if (newPassword.length < 6) {
+        res.status(400).json({ error: 'New password must be at least 6 characters' });
+        return;
+    }
+
+    db.query('SELECT * FROM users WHERE id = ?', [id], async (err, rows) => {
+        if (err || rows.length === 0) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+
+        const user = rows[0];
+        const match = await bcrypt.compare(currentPassword, user.password);
+        if (!match) {
+            res.status(401).json({ error: 'Current password is incorrect' });
+            return;
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        db.query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, id], (err2) => {
+            if (err2) {
+                res.status(500).json({ error: 'Database error' });
+                return;
+            }
+            res.json({ success: true, message: 'Password changed successfully' });
+        });
+    });
+});
+
+// DELETE own account (requires password confirmation)
+// This also removes the user's orders + order_items, since orders.user_id
+// has a foreign-key constraint on users(id) and would otherwise block deletion.
+app.delete('/api/users/:id', async (req, res) => {
+    const { id } = req.params;
+    const { password } = req.body;
+
+    if (!password) {
+        res.status(400).json({ error: 'Password confirmation is required' });
+        return;
+    }
+
+    db.query('SELECT * FROM users WHERE id = ?', [id], async (err, rows) => {
+        if (err || rows.length === 0) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+
+        const user = rows[0];
+        const match = await bcrypt.compare(password, user.password);
+        if (!match) {
+            res.status(401).json({ error: 'Password is incorrect' });
+            return;
+        }
+
+        const deleteUserRow = () => {
+            db.query('DELETE FROM users WHERE id = ?', [id], (errFinal) => {
+                if (errFinal) {
+                    console.error('Delete user error:', errFinal.message);
+                    res.status(500).json({ error: 'Database error' });
+                    return;
+                }
+                res.json({ success: true, message: 'Account deleted successfully' });
+            });
+        };
+
+        db.query('SELECT id FROM orders WHERE user_id = ?', [id], (err2, orders) => {
+            if (err2) {
+                res.status(500).json({ error: 'Database error' });
+                return;
+            }
+            const orderIds = orders.map(o => o.id);
+            if (orderIds.length === 0) {
+                deleteUserRow();
+                return;
+            }
+            db.query('DELETE FROM order_items WHERE order_id IN (?)', [orderIds], (err3) => {
+                if (err3) {
+                    res.status(500).json({ error: 'Database error' });
+                    return;
+                }
+                db.query('DELETE FROM orders WHERE user_id = ?', [id], (err4) => {
+                    if (err4) {
+                        res.status(500).json({ error: 'Database error' });
+                        return;
+                    }
+                    deleteUserRow();
+                });
+            });
+        });
+    });
+});
+
 // ========== ORDERS ROUTES ==========
 
-// GET all orders (Admin)
+// GET all orders (Admin) — includes items with product name/image
 app.get('/api/orders', (req, res) => {
-    db.query('SELECT * FROM orders ORDER BY created_at DESC', (err, results) => {
+    db.query('SELECT * FROM orders ORDER BY created_at DESC', (err, orders) => {
         if (err) {
             res.status(500).json({ error: 'Database error' });
             return;
         }
-        res.json(results);
+        if (orders.length === 0) {
+            return res.json([]);
+        }
+
+        const orderIds = orders.map(o => o.id);
+        db.query(
+            `SELECT oi.order_id, oi.quantity, oi.price, p.id AS product_id, p.name, p.image_url, p.price AS current_price, p.category, p.material, p.stock
+             FROM order_items oi
+             LEFT JOIN products p ON oi.product_id = p.id
+             WHERE oi.order_id IN (?)`,
+            [orderIds],
+            (err2, items) => {
+                if (err2) {
+                    console.error('⚠️ Could not fetch order items:', err2.message);
+                }
+
+                const itemsByOrder = {};
+                (items || []).forEach(item => {
+                    if (!itemsByOrder[item.order_id]) itemsByOrder[item.order_id] = [];
+                    itemsByOrder[item.order_id].push(item);
+                });
+
+                const ordersWithItems = orders.map(order => ({
+                    ...order,
+                    items: itemsByOrder[order.id] || []
+                }));
+
+                res.json(ordersWithItems);
+            }
+        );
     });
 });
 
@@ -335,7 +508,7 @@ app.put('/api/orders/:id', (req, res) => {
 
 // ========== POST create order with confirmation email ==========
 app.post('/api/orders', (req, res) => {
-    const { user_id, items, total, payment_method, shipping_address, phone, fullName } = req.body;
+    const { user_id, items, total, payment_method, shipping_address, phone, fullName, shipping_fee } = req.body;
     console.log('📦 Creating order for user:', user_id, 'Total:', total, 'Payment:', payment_method || 'cod');
     
     // First get user email
@@ -350,8 +523,8 @@ app.post('/api/orders', (req, res) => {
         const userName = userResults[0]?.name || 'Customer';
         
         db.query(
-            'INSERT INTO orders (user_id, total_amount, payment_method, shipping_address, phone, customer_name) VALUES (?, ?, ?, ?, ?, ?)',
-            [user_id, total, payment_method || 'cod', shipping_address || '', phone || '', fullName || ''],
+            'INSERT INTO orders (user_id, total_amount, payment_method, shipping_address, phone, customer_name, shipping_fee) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [user_id, total, payment_method || 'cod', shipping_address || '', phone || '', fullName || '', shipping_fee || 0],
             (err, result) => {
                 if (err) {
                     console.error('Order insert error:', err);
@@ -444,14 +617,43 @@ app.post('/api/payment/khalti/verify', async (req, res) => {
         });
 
         const status = response.data.status; // Completed | Pending | Expired | User canceled | Refunded
+        const transactionId = response.data.transaction_id;
+        const resolvedOrderId = orderId || response.data.purchase_order_id;
 
-        if (status === 'Completed' && orderId) {
-            db.query('UPDATE orders SET payment_status = ?, status = ? WHERE id = ?', ['paid', 'processing', orderId], (err) => {
-                if (err) console.error('⚠️ Could not update order payment status (did you add the payment_status column?):', err.message);
-            });
+        if (status === 'Completed' && resolvedOrderId) {
+            db.query(
+                'UPDATE orders SET payment_status = ?, status = ?, transaction_id = ? WHERE id = ?',
+                ['paid', 'processing', transactionId || null, resolvedOrderId],
+                (err) => {
+                    if (err) console.error('⚠️ Could not update order payment status (did you add the payment_status/transaction_id columns?):', err.message);
+                }
+            );
         }
 
-        res.json({ status, detail: response.data });
+        if (!resolvedOrderId) {
+            return res.json({ status, transaction_id: transactionId, order: null });
+        }
+
+        // Fetch the full order + items so the frontend can render a receipt
+        db.query('SELECT * FROM orders WHERE id = ?', [resolvedOrderId], (err, orderResults) => {
+            if (err || orderResults.length === 0) {
+                return res.json({ status, transaction_id: transactionId, order: null });
+            }
+
+            const order = orderResults[0];
+
+            db.query(
+                `SELECT oi.quantity, oi.price, p.name, p.image_url
+                 FROM order_items oi
+                 LEFT JOIN products p ON oi.product_id = p.id
+                 WHERE oi.order_id = ?`,
+                [order.id],
+                (err2, items) => {
+                    order.items = err2 ? [] : items;
+                    res.json({ status, transaction_id: transactionId, order });
+                }
+            );
+        });
     } catch (error) {
         console.error('❌ Khalti verify error:', error.response?.data || error.message);
         res.status(500).json({ error: 'Failed to verify Khalti payment', detail: error.response?.data });
@@ -623,7 +825,11 @@ app.post('/api/login', async (req, res) => {
                     name: user.name,
                     email: user.email,
                     role: user.role || 'user',
-                    verified: user.verified
+                    verified: user.verified,
+                    phone: user.phone || '',
+                    address: user.address || '',
+                    city: user.city || '',
+                    postal_code: user.postal_code || ''
                 });
             } else {
                 res.status(401).json({ error: 'Invalid credentials' });

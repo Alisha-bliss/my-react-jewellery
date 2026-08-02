@@ -1,0 +1,159 @@
+.receipt-page {
+    padding: 40px 20px;
+    max-width: 800px;
+    margin: 0 auto;
+    min-height: 80vh;
+    background: #f5f0eb;
+}
+
+.receipt-container {
+    background: white;
+    border-radius: 20px;
+    padding: 40px;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.05);
+}
+
+.receipt-success-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.receipt-success-header .success-icon {
+    font-size: 48px;
+    margin-bottom: 10px;
+}
+
+.receipt-success-header h1 {
+    font-family: 'Playfair Display', serif;
+    color: #361a07;
+    font-size: 28px;
+    margin-bottom: 8px;
+}
+
+.receipt-success-header p {
+    color: #666;
+}
+
+.receipt-meta {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    background: #f5f0eb;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 25px;
+}
+
+.meta-label {
+    display: block;
+    font-size: 12px;
+    color: #8B4513;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.meta-value {
+    display: block;
+    font-size: 15px;
+    color: #361a07;
+    font-weight: 600;
+    word-break: break-all;
+}
+
+.paid-status {
+    color: #2e7d32;
+}
+
+.receipt-billed-to, .receipt-items {
+    margin-bottom: 25px;
+}
+
+.receipt-billed-to h3, .receipt-items h3 {
+    color: #361a07;
+    font-size: 16px;
+    margin-bottom: 10px;
+    border-bottom: 2px solid #f0e5d8;
+    padding-bottom: 6px;
+}
+
+.receipt-billed-to p {
+    margin: 2px 0;
+    color: #555;
+}
+
+.receipt-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.receipt-table th {
+    text-align: left;
+    font-size: 13px;
+    color: #8B4513;
+    padding: 8px;
+    border-bottom: 2px solid #f0e5d8;
+}
+
+.receipt-table td {
+    padding: 8px;
+    border-bottom: 1px solid #f0e5d8;
+    color: #361a07;
+}
+
+.receipt-totals {
+    margin-bottom: 30px;
+}
+
+.receipt-total-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    color: #555;
+}
+
+.receipt-total-row.grand {
+    font-size: 18px;
+    font-weight: 700;
+    color: #361a07;
+    border-top: 2px solid #f0e5d8;
+    margin-top: 8px;
+    padding-top: 12px;
+}
+
+.receipt-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.view-orders-btn {
+    background: white;
+    border: 2px solid #8B4513;
+    color: #8B4513;
+    padding: 12px 24px;
+    border-radius: 25px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s;
+}
+
+.view-orders-btn:hover {
+    background: #8B4513;
+    color: white;
+}
+
+.continue-shopping-btn {
+    background: #8B4513;
+    border: 2px solid #8B4513;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 25px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s;
+}
+
+.continue-shopping-btn:hover {
+    opacity: 0.9;
+}

@@ -1,12 +1,7 @@
 import './Checkout.css'
 import { useState, useEffect } from 'react'
 
-function Checkout({ cart, getTotal, user, onClose, clearCart }) {
-  // ========== PAYMENT CONFIGURATION ==========
-  // Esewa TEST Configuration
-  const ESEWA_MERCHANT_ID = 'EPAYTEST'
-  const ESEWA_URL = 'https://uat.esewa.com.np/epay/main'
-  
+function Checkout({ cart, getTotal, getShippingFee, getGrandTotal, user, onClose, clearCart }) {
   const [paymentMethod, setPaymentMethod] = useState('cod')
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
@@ -56,7 +51,8 @@ function Checkout({ cart, getTotal, user, onClose, clearCart }) {
             quantity: item.quantity,
             price: item.price
           })),
-          total: getTotal(),
+          total: getGrandTotal(),
+          shipping_fee: getShippingFee(),
           payment_method: paymentMethod,
           shipping_address: `${formData.address}, ${formData.city}, ${formData.district}`,
           phone: formData.phone,
@@ -74,12 +70,9 @@ function Checkout({ cart, getTotal, user, onClose, clearCart }) {
           setOrderPlaced(true)
           clearCart()
           setLoading(false)
-        } else if (paymentMethod === 'esewa') {
-          setLoading(false)
-          initiateEsewaPayment(orderData.orderId, getTotal())
         } else if (paymentMethod === 'khalti') {
           setLoading(false)
-          initiateKhaltiPayment(orderData.orderId, getTotal())
+          initiateKhaltiPayment(orderData.orderId, getGrandTotal())
         }
       } else {
         alert('Failed to place order: ' + orderData.error)
@@ -90,40 +83,6 @@ function Checkout({ cart, getTotal, user, onClose, clearCart }) {
       alert('Failed to place order. Please try again.')
       setLoading(false)
     }
-  }
-
-  const initiateEsewaPayment = (orderId, amount) => {
-    const form = document.createElement('form')
-    form.method = 'POST'
-    form.action = ESEWA_URL
-    form.target = '_blank'
-    
-    const params = {
-      amt: amount,
-      psc: 0,
-      pdc: 0,
-      txAmt: 0,
-      tAmt: amount,
-      pid: orderId,
-      scd: ESEWA_MERCHANT_ID,
-      su: `${window.location.origin}/payment-success`,
-      fu: `${window.location.origin}/payment-failed`
-    }
-
-    Object.keys(params).forEach(key => {
-      const input = document.createElement('input')
-      input.type = 'hidden'
-      input.name = key
-      input.value = params[key]
-      form.appendChild(input)
-    })
-
-    document.body.appendChild(form)
-    form.submit()
-    
-    setTimeout(() => {
-      document.body.removeChild(form)
-    }, 1000)
   }
 
   const initiateKhaltiPayment = async (orderId, amount) => {
@@ -277,42 +236,27 @@ function Checkout({ cart, getTotal, user, onClose, clearCart }) {
                 <h2>Payment Method</h2>
                 
                 <div className="payment-options">
-                  <div 
+                  <div
                     className={`payment-option ${paymentMethod === 'cod' ? 'selected' : ''}`}
                     onClick={() => setPaymentMethod('cod')}
                   >
-                    <div className="payment-radio">
-                      <input type="radio" checked={paymentMethod === 'cod'} readOnly />
-                      <span className="payment-label">Cash on Delivery</span>
-                    </div>
-                    <div className="payment-icon">💰</div>
+                    <input type="radio" className="payment-option-radio" checked={paymentMethod === 'cod'} readOnly />
+                    <div className="payment-icon payment-icon-cod">💵</div>
+                    <span className="payment-label">Cash on Delivery</span>
                   </div>
 
-                  <div 
-                    className={`payment-option ${paymentMethod === 'esewa' ? 'selected' : ''}`}
-                    onClick={() => setPaymentMethod('esewa')}
-                  >
-                    <div className="payment-radio">
-                      <input type="radio" checked={paymentMethod === 'esewa'} readOnly />
-                      <span className="payment-label">Esewa</span>
-                    </div>
-                    <div className="payment-icon">💳</div>
-                  </div>
-
-                  <div 
+                  <div
                     className={`payment-option ${paymentMethod === 'khalti' ? 'selected' : ''}`}
                     onClick={() => setPaymentMethod('khalti')}
                   >
-                    <div className="payment-radio">
-                      <input type="radio" checked={paymentMethod === 'khalti'} readOnly />
-                      <span className="payment-label">Khalti</span>
-                    </div>
-                    <div className="payment-icon">📱</div>
+                    <input type="radio" className="payment-option-radio" checked={paymentMethod === 'khalti'} readOnly />
+                    <div className="payment-icon payment-icon-khalti">K</div>
+                    <span className="payment-label">Khalti</span>
                   </div>
                 </div>
 
                 <button type="submit" className="place-order-btn" disabled={loading}>
-                  {loading ? 'Processing...' : `Place Order (Rs. ${getTotal().toLocaleString()})`}
+                  {loading ? 'Processing...' : `Place Order (Rs. ${getGrandTotal().toLocaleString()})`}
                 </button>
               </div>
             </form>
@@ -341,17 +285,14 @@ function Checkout({ cart, getTotal, user, onClose, clearCart }) {
               </div>
               <div className="total-row">
                 <span>Shipping</span>
-                <span>Free</span>
+                <span>{getShippingFee() === 0 ? 'Free' : `Rs. ${getShippingFee()}`}</span>
               </div>
-              {paymentMethod === 'cod' && (
-                <div className="total-row">
-                  <span>COD Fee</span>
-                  <span>Rs. 50</span>
-                </div>
+              {getShippingFee() > 0 && (
+                <p className="free-shipping-hint">Add Rs. {(10000 - getTotal()).toLocaleString()} more for free shipping!</p>
               )}
               <div className="total-row grand-total">
                 <span>Total</span>
-                <span>Rs. {(paymentMethod === 'cod' ? getTotal() + 50 : getTotal()).toLocaleString()}</span>
+                <span>Rs. {getGrandTotal().toLocaleString()}</span>
               </div>
             </div>
           </div>

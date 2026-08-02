@@ -7,6 +7,7 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
   const [activeTab, setActiveTab] = useState('dashboard')
   const [showStatsModal, setShowStatsModal] = useState(false)
   const [statsModalData, setStatsModalData] = useState({ title: '', data: [], type: '' })
+  const [viewingPaymentOrder, setViewingPaymentOrder] = useState(null)
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalProducts: 0,
@@ -18,7 +19,11 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
     deliveredOrders: 0,
     cancelledOrders: 0,
     totalRevenue: 0,
+    codRevenue: 0,
+    khaltiRevenue: 0,
     monthlyRevenue: 0,
+    monthlyCodRevenue: 0,
+    monthlyKhaltiRevenue: 0,
     weeklyOrders: 0
   })
   const [orders, setOrders] = useState([])
@@ -108,26 +113,41 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
       const deliveredOrders = safeOrders.filter(o => o && o.status === 'delivered').length
       const cancelledOrders = safeOrders.filter(o => o && o.status === 'cancelled').length
       
-      // Calculate revenue ONLY from DELIVERED orders
-      const totalRevenue = safeOrders
-        .filter(o => o && o.status === 'delivered')
+      // TOTAL REVENUE = COD orders that are delivered  +  Khalti orders that are paid (any status)
+      // (a khalti order is counted once it's paid, not counted twice if it later becomes delivered)
+      const codRevenue = safeOrders
+        .filter(o => o && o.status === 'delivered' && o.payment_method !== 'khalti')
         .reduce((sum, o) => sum + parseFloat(o?.total_amount || 0), 0)
+
+      const khaltiRevenue = safeOrders
+        .filter(o => o && o.payment_method === 'khalti' && o.payment_status === 'paid' && o.status !== 'cancelled')
+        .reduce((sum, o) => sum + parseFloat(o?.total_amount || 0), 0)
+
+      const totalRevenue = codRevenue + khaltiRevenue
       
       // Get current month in Nepal time
       const now = new Date()
       const nowNepal = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kathmandu' }))
       const currentMonth = nowNepal.getMonth()
       const currentYear = nowNepal.getFullYear()
-      
-      const monthlyRevenue = safeOrders
-        .filter(o => {
-          if (!o || !o.created_at) return false
-          if (o.status !== 'delivered') return false
-          const orderDate = new Date(o.created_at)
-          const orderNepal = new Date(orderDate.toLocaleString('en-US', { timeZone: 'Asia/Kathmandu' }))
-          return orderNepal.getMonth() === currentMonth && orderNepal.getFullYear() === currentYear
-        })
+
+      const isInCurrentMonth = (o) => {
+        if (!o || !o.created_at) return false
+        const orderDate = new Date(o.created_at)
+        const orderNepal = new Date(orderDate.toLocaleString('en-US', { timeZone: 'Asia/Kathmandu' }))
+        return orderNepal.getMonth() === currentMonth && orderNepal.getFullYear() === currentYear
+      }
+
+      // MONTHLY REVENUE = same COD-delivered + Khalti-paid logic, scoped to this month's orders
+      const monthlyCodRevenue = safeOrders
+        .filter(o => o && isInCurrentMonth(o) && o.status === 'delivered' && o.payment_method !== 'khalti')
         .reduce((sum, o) => sum + parseFloat(o?.total_amount || 0), 0)
+
+      const monthlyKhaltiRevenue = safeOrders
+        .filter(o => o && isInCurrentMonth(o) && o.payment_method === 'khalti' && o.payment_status === 'paid' && o.status !== 'cancelled')
+        .reduce((sum, o) => sum + parseFloat(o?.total_amount || 0), 0)
+
+      const monthlyRevenue = monthlyCodRevenue + monthlyKhaltiRevenue
       
       // Calculate monthly orders (ALL orders in current month)
       const monthlyOrders = safeOrders
@@ -160,7 +180,11 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
         deliveredOrders,
         cancelledOrders,
         totalRevenue,
+        codRevenue,
+        khaltiRevenue,
         monthlyRevenue,
+        monthlyCodRevenue,
+        monthlyKhaltiRevenue,
         weeklyOrders
       })
     } catch (error) {
@@ -176,7 +200,11 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
         deliveredOrders: 0,
         cancelledOrders: 0,
         totalRevenue: 0,
+        codRevenue: 0,
+        khaltiRevenue: 0,
         monthlyRevenue: 0,
+        monthlyCodRevenue: 0,
+        monthlyKhaltiRevenue: 0,
         weeklyOrders: 0
       })
     }
@@ -231,8 +259,10 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
           const monthYear = getMonthYear(order.created_at) // e.g., "June 2026"
           const monthYearShort = getMonthYearShort(order.created_at) // e.g., "Jun 2026"
           
-          // For revenue chart - only delivered orders
-          if (order.status === 'delivered') {
+          // For revenue chart - COD orders delivered + Khalti orders paid (excluding cancelled)
+          const countsForRevenue = (order.status === 'delivered' && order.payment_method !== 'khalti')
+            || (order.payment_method === 'khalti' && order.payment_status === 'paid' && order.status !== 'cancelled')
+          if (countsForRevenue) {
             if (!monthlyMap[monthYearShort]) {
               monthlyMap[monthYearShort] = 0
             }
@@ -429,13 +459,13 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
         data = orders.map(o => ({ id: o.id, user_id: o.user_id, total: o.total_amount, status: o.status, date: formatNepalTime(o.created_at) }))
         break
       case 'revenue':
-        title = 'Revenue Details (Delivered Orders Only)'
+        title = 'Revenue Details (COD Delivered + Khalti Paid, excluding cancelled)'
         data = orders
-          .filter(o => o.status === 'delivered')
-          .map(o => ({ id: o.id, user_id: o.user_id, amount: o.total_amount, date: formatNepalTime(o.created_at) }))
+          .filter(o => (o.status === 'delivered' && o.payment_method !== 'khalti') || (o.payment_method === 'khalti' && o.payment_status === 'paid' && o.status !== 'cancelled'))
+          .map(o => ({ id: o.id, user_id: o.user_id, amount: o.total_amount, payment_method: o.payment_method || 'cod', status: o.status, date: formatNepalTime(o.created_at) }))
         break
       case 'monthly':
-        title = 'Monthly Revenue Details (Delivered Orders Only)'
+        title = 'Monthly Revenue Details (COD Delivered + Khalti Paid)'
         data = monthlyData.map(m => ({ month: m.month, revenue: m.revenue }))
         break
       case 'pending':
@@ -609,6 +639,9 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
                 <div className="stat-info">
                   <h3>Rs. {(stats.totalRevenue || 0).toLocaleString()}</h3>
                   <p>Total Revenue</p>
+                  <p className="revenue-breakdown-dash">
+                    COD: Rs. {(stats.codRevenue || 0).toLocaleString()} · Khalti: Rs. {(stats.khaltiRevenue || 0).toLocaleString()}
+                  </p>
                 </div>
               </div>
             </div>
@@ -617,6 +650,9 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
               <div className="quick-stat-card clickable" onClick={() => handleStatClick('monthly')}>
                 <h4>📈 Monthly Revenue</h4>
                 <p className="quick-stat-value">Rs. {(stats.monthlyRevenue || 0).toLocaleString()}</p>
+                <p className="quick-stat-breakdown-dash">
+                  COD: Rs. {(stats.monthlyCodRevenue || 0).toLocaleString()} · Khalti: Rs. {(stats.monthlyKhaltiRevenue || 0).toLocaleString()}
+                </p>
               </div>
               <div className="quick-stat-card clickable" onClick={() => handleStatClick('monthlyorders')}>
                 <h4>📊 Monthly Orders</h4>
@@ -664,7 +700,7 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
               <h3>Recent Orders</h3>
               <table className="admin-table">
                 <thead>
-                  <tr><th>Order ID</th><th>Date</th><th>Amount</th><th>Status</th><th>Action</th></tr>
+                  <tr><th>Order ID</th><th>Date</th><th>Amount</th><th>Payment</th><th>Status</th><th>Action</th></tr>
                 </thead>
                 <tbody>
                   {safeOrders.length > 0 ? (
@@ -673,6 +709,15 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
                         <td>#{order.id}</td>
                         <td>{formatNepalTime(order.created_at)}</td>
                         <td>Rs. {order.total_amount || 0}</td>
+                        <td>
+                          {order.payment_method === 'khalti' ? (
+                            <button className="payment-badge payment-badge-khalti" onClick={() => setViewingPaymentOrder(order)} title="View Khalti transaction details">
+                              📱 Khalti
+                            </button>
+                          ) : (
+                            <span className="payment-badge payment-badge-cod">💵 COD</span>
+                          )}
+                        </td>
                         <td><span className={`status-badge ${order.status || 'pending'}`}>{order.status || 'pending'}</span></td>
                         <td>
                           <select onChange={(e) => updateOrderStatus(order.id, e.target.value)} value={order.status || 'pending'}>
@@ -686,7 +731,7 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
                       </tr>
                     ))
                   ) : (
-                    <tr><td colSpan="5" style={{textAlign: 'center'}}>No orders found</td></tr>
+                    <tr><td colSpan="6" style={{textAlign: 'center'}}>No orders found</td></tr>
                   )}
                 </tbody>
               </table>
@@ -700,7 +745,7 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
             <h2>All Orders</h2>
             <table className="admin-table">
               <thead>
-                <tr><th>Order ID</th><th>Customer</th><th>Date</th><th>Amount</th><th>Status</th><th>Action</th></tr>
+                <tr><th>Order ID</th><th>Customer</th><th>Date</th><th>Amount</th><th>Payment</th><th>Status</th><th>Action</th></tr>
               </thead>
               <tbody>
                 {safeOrders.length > 0 ? (
@@ -710,6 +755,15 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
                       <td>User #{order.user_id}</td>
                       <td>{formatNepalTime(order.created_at)}</td>
                       <td>Rs. {order.total_amount || 0}</td>
+                      <td>
+                        {order.payment_method === 'khalti' ? (
+                          <button className="payment-badge payment-badge-khalti" onClick={() => setViewingPaymentOrder(order)} title="View Khalti transaction details">
+                            📱 Khalti
+                          </button>
+                        ) : (
+                          <span className="payment-badge payment-badge-cod">💵 COD</span>
+                        )}
+                      </td>
                       <td><span className={`status-badge ${order.status || 'pending'}`}>{order.status || 'pending'}</span></td>
                       <td>
                         <select onChange={(e) => updateOrderStatus(order.id, e.target.value)} value={order.status || 'pending'}>
@@ -723,7 +777,7 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
                     </tr>
                   ))
                 ) : (
-                  <tr><td colSpan="6" style={{textAlign: 'center'}}>No orders found</td></tr>
+                  <tr><td colSpan="7" style={{textAlign: 'center'}}>No orders found</td></tr>
                 )}
               </tbody>
             </table>
@@ -1074,6 +1128,45 @@ function AdminPanel({ products, setProducts, onClose, onLogout, user, onGoToPubl
             </div>
             <div className="modal-footer">
               <button className="close-modal-footer-btn" onClick={() => setShowStatsModal(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Khalti Payment Detail Modal */}
+      {viewingPaymentOrder && (
+        <div className="modal-overlay" onClick={() => setViewingPaymentOrder(null)}>
+          <div className="modal-content payment-detail-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>📱 Khalti Payment Details</h2>
+              <button className="close-modal-btn" onClick={() => setViewingPaymentOrder(null)}>✕</button>
+            </div>
+            <div className="payment-detail-body">
+              <div className="payment-detail-row">
+                <span>Order ID</span>
+                <strong>#{viewingPaymentOrder.id}</strong>
+              </div>
+              <div className="payment-detail-row">
+                <span>Transaction ID</span>
+                <strong>{viewingPaymentOrder.transaction_id || 'N/A'}</strong>
+              </div>
+              <div className="payment-detail-row">
+                <span>Date</span>
+                <strong>{formatNepalTime(viewingPaymentOrder.created_at)}</strong>
+              </div>
+              <div className="payment-detail-row">
+                <span>Amount</span>
+                <strong>Rs. {viewingPaymentOrder.total_amount || 0}</strong>
+              </div>
+              <div className="payment-detail-row">
+                <span>Payment Status</span>
+                <strong className={viewingPaymentOrder.payment_status === 'paid' ? 'payment-status-paid' : 'payment-status-pending'}>
+                  {viewingPaymentOrder.payment_status === 'paid' ? '✅ Paid' : (viewingPaymentOrder.payment_status || 'pending')}
+                </strong>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="close-modal-footer-btn" onClick={() => setViewingPaymentOrder(null)}>Close</button>
             </div>
           </div>
         </div>
